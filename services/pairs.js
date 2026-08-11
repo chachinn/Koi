@@ -68,6 +68,27 @@
         .single();
       if (error) throw error;
       return data;
+    },
+
+    async subscribe(pairId, onChange) {
+      if (!pairId) throw new Error("No Koi pair is connected.");
+      await this.unsubscribe();
+      await cloud.client.realtime.setAuth();
+
+      const topics = ["pairs", "pair_members", "profiles"];
+      const channels = topics.map(name => cloud.client
+        .channel(`pair:${pairId}:${name}`, { config: { private: true } })
+        .on("broadcast", { event: "*" }, payload => onChange?.(payload))
+        .subscribe());
+
+      cloud.runtime.pairChannels = channels;
+      return channels;
+    },
+
+    async unsubscribe() {
+      const channels = cloud.runtime.pairChannels || [];
+      await Promise.all(channels.map(channel => cloud.client.removeChannel(channel).catch(() => {})));
+      cloud.runtime.pairChannels = [];
     }
   };
 })();

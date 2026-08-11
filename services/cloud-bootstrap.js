@@ -305,11 +305,35 @@
 
   cloud.refreshMemories = refreshMemories;
 
+  async function refreshPair({ quiet = true } = {}) {
+    if (!currentSession) return;
+    try {
+      const fresh = await cloud.pairs.getMine();
+      if (!fresh?.pair) return;
+      await mapCloudPairToLocal(fresh);
+      render();
+    } catch (error) {
+      console.error("Koi pair refresh failed", error);
+      if (!quiet) toast(error.message || "Could not refresh your pair");
+    }
+  }
+
+  cloud.refreshPair = refreshPair;
+
   async function connectPair(payload) {
     await mapCloudPairToLocal(payload);
     cloud.runtime.ready = true;
     document.documentElement.classList.add("koi-cloud-ready");
     hideGate();
+
+    if (cloud.sharedState) {
+      try {
+        await cloud.sharedState.start(payload.pair.id, { initializeIfMissing: true });
+      } catch (error) {
+        console.error("Koi shared-state startup failed", error);
+        toast("Some shared edits are waiting to sync");
+      }
+    }
 
     await cloud.sync.flush();
     await Promise.all([
@@ -325,6 +349,12 @@
     if (cloud.memories) {
       await cloud.memories.subscribe(payload.pair.id, async () => {
         await refreshMemories({ quiet: true });
+      });
+    }
+
+    if (cloud.pairs?.subscribe) {
+      await cloud.pairs.subscribe(payload.pair.id, async () => {
+        await refreshPair({ quiet: true });
       });
     }
 
@@ -462,7 +492,7 @@
       card.innerHTML = `
         <p class="eyebrow">KOI CLOUD</p>
         <h3>${html(cloudStatusText())}</h3>
-        <p class="small muted">${cloud.runtime.ready ? "Little Things and Memories now sync through your private pair. Memory photos are stored privately in Koi Cloud so they can follow you to another phone." : "Cloud setup is optional until you fill in config/supabase-config.js."}</p>
+        <p class="small muted">${cloud.runtime.ready ? "Profiles, relationship details, shared colors/wallpaper, Little Things, Memories, and several shared Koi collections now sync through your private pair. Private-answer features remain separated until their dedicated cloud flows are enabled." : "Cloud setup is optional until you fill in config/supabase-config.js."}</p>
         ${cloud.runtime.ready ? `<div class="inline-actions"><button data-cloud-action="show-pair-info">Pair details</button><button data-cloud-action="sign-out">Sign out</button></div>` : ""}
       `;
       page.appendChild(card);
@@ -502,7 +532,11 @@
 
   async function signOutAndReset() {
     try {
-      await cloud.memories?.unsubscribe?.();
+      await Promise.all([
+        cloud.memories?.unsubscribe?.(),
+        cloud.sharedState?.unsubscribe?.(),
+        cloud.pairs?.unsubscribe?.()
+      ]);
       await cloud.auth.signOut();
     } finally {
       currentSession = null;
@@ -712,17 +746,36 @@
     }
   });
 
-  window.addEventListener("online", async () => {
+  async function refreshAllCloudData({ showToast = false } = {}) {
     if (!cloud.runtime.ready) return;
     await cloud.sync.flush();
-    await Promise.all([refreshLittleThings({ quiet: true }), refreshMemories({ quiet: true })]);
-    toast("Koi is back online");
+    await Promise.all([
+      refreshLittleThings({ quiet: true }),
+      refreshMemories({ quiet: true }),
+      cloud.sharedState?.refresh?.(),
+      refreshPair({ quiet: true })
+    ]);
+    await cloud.sharedState?.flushLocal?.();
+    if (showToast) toast("Koi is back online");
+  }
+
+  window.addEventListener("online", () => refreshAllCloudData({ showToast: true }));
+
+  // iOS suspends background PWAs. Refresh immediately whenever Koi becomes visible
+  // again so a partner's edits are never dependent on a still-open WebSocket.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshAllCloudData();
   });
+  window.addEventListener("pageshow", () => refreshAllCloudData());
 
   cloud.auth.onChange(async (event, session) => {
     currentSession = session;
     if (event === "SIGNED_OUT") {
-      await cloud.memories?.unsubscribe?.();
+      await Promise.all([
+        cloud.memories?.unsubscribe?.(),
+        cloud.sharedState?.unsubscribe?.(),
+        cloud.pairs?.unsubscribe?.()
+      ]);
       activePairPayload = null;
       cloud.runtime.ready = false;
       document.documentElement.classList.remove("koi-cloud-ready");

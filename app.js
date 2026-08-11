@@ -389,7 +389,18 @@ const appShell = document.getElementById("app");
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   applyTheme();
+  window.KoiCloud?.sharedState?.scheduleFromLocal?.();
 }
+
+window.KoiLocalState = {
+  get: () => state,
+  persistRemote: () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    applyTheme();
+  },
+  render: () => render(),
+  applyTheme: () => applyTheme()
+};
 
 function applyTheme() {
   const theme = state.settings.themePair === "custom"
@@ -926,7 +937,7 @@ function renderYou() {
           <div class="wallpaper-control-group"><strong>Photo position</strong><div class="segmented-control">${["top","center","bottom"].map(value => `<button data-action="set-wallpaper-position" data-value="${value}" class="${position === value ? "is-active" : ""}">${value[0].toUpperCase() + value.slice(1)}</button>`).join("")}</div></div>
           <button class="button button-ghost button-block" data-action="remove-custom-wallpaper" style="margin-top:12px">Remove custom photo</button>
         ` : ""}
-        <p class="micro muted" style="margin:10px 2px 0">The custom wallpaper is saved on this device and is included when you export a Koi backup.</p>
+        <p class="micro muted" style="margin:10px 2px 0">When Koi Cloud is connected, your custom wallpaper is stored privately and syncs to your partner's phone. Offline/local mode still keeps it on this device.</p>
       </article>
 
       <div class="section-heading"><h2>Reminders</h2></div>
@@ -1258,6 +1269,39 @@ function answerThenNow(id) {
 function openEditProfile() {
   const me = currentProfile();
   const partner = partnerProfile();
+  const cloudReady = Boolean(window.KoiCloud?.runtime?.ready && window.KoiCloud?.pairs?.updateMyProfile);
+
+  if (cloudReady) {
+    openModal({ eyebrow: "YOUR PROFILE", title: "How you appear in Koi", html: `
+      <form id="profileForm" class="form-grid">
+        <div class="two-grid">
+          <div class="field"><label>Your emoji</label><input name="myAvatar" maxlength="4" value="${escapeHTML(me.avatar)}"></div>
+          <div class="field"><label>Your name</label><input name="myName" maxlength="40" value="${escapeHTML(me.displayName)}"></div>
+        </div>
+        <article class="card card-lavender"><p class="small muted"><strong>${escapeHTML(partner.displayName)}</strong> edits their own name and emoji from their phone. Their changes will sync here automatically.</p></article>
+        <button class="button button-primary" type="submit">Save my profile</button>
+      </form>` });
+
+    document.getElementById("profileForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      const nextName = String(form.get("myName") || "You").trim();
+      const nextAvatar = String(form.get("myAvatar") || "🌷").trim();
+      try {
+        await window.KoiCloud.pairs.updateMyProfile({ displayName: nextName, avatar: nextAvatar });
+        me.displayName = nextName;
+        me.avatar = nextAvatar;
+        saveState();
+        closeModal();
+        render();
+        toast("Profile synced to both phones 💗");
+      } catch (error) {
+        toast(error.message || "Could not sync your profile");
+      }
+    });
+    return;
+  }
+
   openModal({ eyebrow: "PROFILES", title: "The two of you", html: `<form id="profileForm" class="form-grid"><div class="two-grid"><div class="field"><label>Your emoji</label><input name="myAvatar" maxlength="4" value="${escapeHTML(me.avatar)}"></div><div class="field"><label>Your name</label><input name="myName" maxlength="40" value="${escapeHTML(me.displayName)}"></div></div><div class="two-grid"><div class="field"><label>Partner emoji</label><input name="partnerAvatar" maxlength="4" value="${escapeHTML(partner.avatar)}"></div><div class="field"><label>Partner name</label><input name="partnerName" maxlength="40" value="${escapeHTML(partner.displayName)}"></div></div><button class="button button-primary" type="submit">Save profiles</button></form>` });
   document.getElementById("profileForm").addEventListener("submit", event => { event.preventDefault(); const form = new FormData(event.currentTarget); me.displayName = String(form.get("myName") || "You").trim(); me.avatar = String(form.get("myAvatar") || "🌷").trim(); partner.displayName = String(form.get("partnerName") || "Love").trim(); partner.avatar = String(form.get("partnerAvatar") || "☁️").trim(); saveState(); closeModal(); render(); toast("Profiles updated"); });
 }
@@ -1372,7 +1416,14 @@ document.addEventListener("click", event => {
   else if (action === "set-wallpaper") { state.settings.wallpaper = button.dataset.id; state.settings.customWallpaperEnabled = false; saveState(); render(); toast("Wallpaper updated"); }
   else if (action === "set-wallpaper-overlay") { state.settings.customWallpaperOverlay = button.dataset.value || "medium"; saveState(); render(); }
   else if (action === "set-wallpaper-position") { state.settings.customWallpaperPosition = button.dataset.value || "center"; saveState(); render(); }
-  else if (action === "remove-custom-wallpaper") { state.settings.customWallpaperPhoto = ""; state.settings.customWallpaperEnabled = false; saveState(); render(); toast("Custom wallpaper removed"); }
+  else if (action === "remove-custom-wallpaper") {
+    state.settings.customWallpaperPhoto = "";
+    state.settings.customWallpaperEnabled = false;
+    saveState(); render(); toast("Custom wallpaper removed");
+    if (window.KoiCloud?.runtime?.ready && window.KoiCloud?.sharedState?.removeWallpaper) {
+      window.KoiCloud.sharedState.removeWallpaper().catch(error => console.warn("Could not remove cloud wallpaper", error));
+    }
+  }
   else if (action === "request-notifications") requestNotifications();
   else if (action === "install-app") installApp();
   else if (action === "export-data") exportData();
@@ -1388,13 +1439,20 @@ document.addEventListener("change", async event => {
     if (!file) return;
     if (!file.type.startsWith("image/")) { toast("Please choose an image"); return; }
     try {
-      const compressed = await compressImage(file, 1440, 0.72);
-      state.settings.customWallpaperPhoto = compressed;
-      state.settings.customWallpaperEnabled = true;
-      saveState(); render(); toast("Custom wallpaper saved 💗");
+      if (window.KoiCloud?.runtime?.ready && window.KoiCloud?.sharedState?.uploadWallpaper) {
+        const uploaded = await window.KoiCloud.sharedState.uploadWallpaper(file);
+        state.settings.customWallpaperPhoto = uploaded?.signedUrl || state.settings.customWallpaperPhoto || "";
+        state.settings.customWallpaperEnabled = true;
+        saveState(); render(); toast("Wallpaper synced to both phones 💗");
+      } else {
+        const compressed = await compressImage(file, 1440, 0.72);
+        state.settings.customWallpaperPhoto = compressed;
+        state.settings.customWallpaperEnabled = true;
+        saveState(); render(); toast("Custom wallpaper saved 💗");
+      }
     } catch (error) {
       console.warn("Could not prepare wallpaper", error);
-      toast("That photo could not be used");
+      toast(error.message || "That photo could not be used");
     }
     return;
   }
