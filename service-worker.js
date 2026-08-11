@@ -1,9 +1,10 @@
-const CACHE_VERSION = "koi-build1-v2-icons";
+const CACHE_VERSION = "koi-build1-v4-data-folder";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
+  "./data/data.js",
   "./manifest.json",
   "./icon/icon-192.png",
   "./icon/icon-512.png",

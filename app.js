@@ -28,7 +28,7 @@
 */
 
 const STORAGE_KEY = "koi_build1_state_v1";
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
 
 const QUESTION_BANK = [
   { id: "q01", category: "Sweet", text: "What’s one small thing I did recently that made you feel loved?" },
@@ -129,11 +129,23 @@ const DEFAULT_STATE = {
     wallpaper: "petals",
     dailyReminder: true,
     weeklyCheckin: true,
-    notificationPermissionAsked: false
+    notificationPermissionAsked: false,
+    questionPack: "all"
   },
   dailyQuestionOverrides: {},
   answers: {},
   reactions: {},
+  customQuestions: [],
+  littleThings: [],
+  dateCompletions: [],
+  blindDate: { preferences: { u1: null, u2: null }, match: null, updatedAt: null },
+  predictions: [],
+  eras: [
+    { id: "era_current", title: "Golden Everyday Era", emoji: "✨", startDate: "2023-03-12", endDate: "", description: "The chapter we are living right now.", active: true }
+  ],
+  activeEraId: "era_current",
+  dismissedTraditionSuggestions: [],
+  museum: { featuredIds: [] },
   checkins: [],
   memories: [
     {
@@ -209,6 +221,8 @@ const DEFAULT_STATE = {
   ],
   room: {
     level: 3,
+    mascots: { pinkName: "Pink Koi", lavenderName: "Lavender Koi" },
+    unlockedMoments: [],
     activeDecor: ["lights", "frame", "plant", "plush"],
     unlockedDecor: ["lights", "frame", "plant", "plush", "camera", "heart", "books"],
     pet: "🐰"
@@ -1317,3 +1331,658 @@ function enableAppLikeZoomLock() {
 }
 
 enableAppLikeZoomLock();
+
+/* =========================================================
+   KOI BUILD 1.2 — ALL 14 LOCAL-FIRST FEATURE EXPANSION
+   Adds:
+   1) Daily Question History
+   2) Question Packs + custom questions
+   3) Little Things
+   4) Date Jar 2.0
+   5) Blind Date Builder
+   6) I Bet You predictions
+   7) Relationship Lore 2.0
+   8) Our Canon challenges
+   9) Accidental Traditions
+   10) Then vs Now 2.0
+   11) Relationship Eras
+   12) Richer Our Museum
+   13) Room progression
+   14) Pink + lavender koi mascots
+   ========================================================= */
+
+(function enableKoiBuild12() {
+  const DATA = window.KOI_DATA || {};
+  const baseOpenExhibit = openExhibit;
+
+  function featureDate(value) {
+    if (!value) return "";
+    return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function normalizeText(value) {
+    return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
+  function ensureFeatureState() {
+    state.settings.questionPack ||= "all";
+    state.customQuestions ||= [];
+    state.littleThings ||= [];
+    state.dateCompletions ||= [];
+    state.blindDate ||= { preferences: { u1: null, u2: null }, match: null, updatedAt: null };
+    state.predictions ||= [];
+    state.eras ||= [{
+      id: "era_current",
+      title: state.pair.currentEra || "Our Current Era",
+      emoji: "✨",
+      startDate: state.pair.anniversary || todayKey(),
+      endDate: "",
+      description: "The chapter we are living right now.",
+      active: true
+    }];
+    state.activeEraId ||= state.eras.find(item => item.active)?.id || state.eras[0]?.id || "";
+    state.dismissedTraditionSuggestions ||= [];
+    state.room ||= {};
+    state.room.activeDecor ||= ["lights", "frame", "plant", "plush"];
+    state.room.mascots ||= { pinkName: "Pink Koi", lavenderName: "Lavender Koi" };
+    state.room.unlockedMoments ||= [];
+    state.museum ||= { featuredIds: [] };
+
+    state.dateIdeas = (state.dateIdeas || []).map(item => ({
+      setting: "Anywhere",
+      duration: "1–2 hours",
+      location: "",
+      rating: "",
+      completedAt: "",
+      timesDone: item.completed ? 1 : 0,
+      ...item
+    }));
+
+    state.lore = (state.lore || []).map(item => ({
+      category: "inside-joke",
+      dateEstablished: "",
+      photo: "",
+      eraId: "",
+      ...item
+    }));
+
+    state.canon = (state.canon || []).map(item => ({ challenge: null, ...item }));
+    state.traditions = (state.traditions || []).map(item => ({ source: "manual", ...item }));
+    state.thenNow = (state.thenNow || []).map(item => ({ revisitDate: "", ...item }));
+    state.memories = (state.memories || []).map(item => ({ eraId: "", ...item }));
+
+    if (!runtime.dateFilters) runtime.dateFilters = { category: "All", budget: "All", setting: "All" };
+    if (!runtime.loreFilter) runtime.loreFilter = "All";
+    if (!runtime.museumKindFilter) runtime.museumKindFilter = "All";
+  }
+
+  ensureFeatureState();
+  state.version = Math.max(Number(state.version || 1), 2);
+  saveState();
+
+  // ---------- Shared feature helpers ----------
+
+  function allQuestions() {
+    const dataQuestions = Array.isArray(DATA.questions) ? DATA.questions : [];
+    const custom = (state.customQuestions || []).map(item => ({ ...item, category: item.category || "Our Question", pack: "custom" }));
+    return [...QUESTION_BANK.map(item => ({ ...item, pack: item.pack || "all" })), ...dataQuestions, ...custom];
+  }
+
+  function questionById(id) {
+    return allQuestions().find(item => item.id === id) || QUESTION_BANK[0];
+  }
+
+  function activeQuestionPool() {
+    const pack = state.settings.questionPack || "all";
+    const questions = allQuestions();
+    if (pack === "all") return questions;
+    const filtered = questions.filter(item => item.pack === pack);
+    return filtered.length ? filtered : questions;
+  }
+
+  dailyQuestion = function dailyQuestionBuild12() {
+    const key = todayKey();
+    const override = state.dailyQuestionOverrides[key];
+    if (override) return questionById(override);
+    const pool = activeQuestionPool();
+    return pool[hashString(`${key}_${state.settings.questionPack || "all"}`) % pool.length] || QUESTION_BANK[0];
+  };
+
+  skipQuestion = function skipQuestionBuild12() {
+    const key = todayKey();
+    const current = dailyQuestion();
+    const pool = activeQuestionPool();
+    const index = Math.max(0, pool.findIndex(item => item.id === current.id));
+    const next = pool[(index + 1) % pool.length] || pool[0];
+    if (!next) return;
+    state.dailyQuestionOverrides[key] = next.id;
+    delete state.answers[key];
+    saveState();
+    render();
+    toast("New question for today ✦");
+  };
+
+  function currentPack() {
+    return (DATA.questionPacks || []).find(item => item.id === (state.settings.questionPack || "all")) || { id: "all", icon: "💗", label: "Everything" };
+  }
+
+  function answeredDays() {
+    return Object.entries(state.answers || {})
+      .filter(([, record]) => record?.questionId)
+      .sort((a, b) => b[0].localeCompare(a[0]));
+  }
+
+  function monthlyLittleThings() {
+    const groups = {};
+    [...(state.littleThings || [])].sort((a, b) => (b.date || "").localeCompare(a.date || "")).forEach(item => {
+      const key = (item.date || todayKey()).slice(0, 7);
+      groups[key] ||= [];
+      groups[key].push(item);
+    });
+    return groups;
+  }
+
+  function activeEra() {
+    return state.eras.find(item => item.id === state.activeEraId) || state.eras.find(item => item.active) || state.eras[0];
+  }
+
+  function eraForDate(date) {
+    if (!date) return activeEra();
+    return state.eras.find(era => {
+      const afterStart = !era.startDate || date >= era.startDate;
+      const beforeEnd = !era.endDate || date <= era.endDate;
+      return afterStart && beforeEnd;
+    }) || activeEra();
+  }
+
+  function relationshipPoints() {
+    const completeQuestionDays = answeredDays().filter(([, record]) => Boolean(record.u1?.text && record.u2?.text)).length;
+    return (
+      completeQuestionDays * 2 +
+      state.memories.length * 2 +
+      state.lore.length * 2 +
+      state.littleThings.length +
+      Math.min(state.checkins.length, 30) +
+      state.traditions.length * 3 +
+      state.dateCompletions.length * 2 +
+      state.eras.length * 2
+    );
+  }
+
+  roomLevel = function roomLevelBuild12() {
+    return Math.max(1, Math.min(12, 1 + Math.floor(relationshipPoints() / 10)));
+  };
+
+  roomUnlockedDecor = function roomUnlockedDecorBuild12() {
+    const unlocks = Array.isArray(DATA.roomUnlocks) ? DATA.roomUnlocks : [];
+    return unlocks.filter(item => relationshipPoints() >= Number(item.points || 0)).map(item => item.id);
+  };
+
+  function nextRoomUnlock() {
+    return (DATA.roomUnlocks || []).find(item => relationshipPoints() < Number(item.points || 0)) || null;
+  }
+
+  function renderKoiPair(message = "Two little koi, one little us.") {
+    return `<div class="koi-pond-mini" aria-label="Koi mascots">
+      <div class="koi-fish koi-pink"><span class="koi-eye"></span><span class="koi-tail"></span></div>
+      <div class="koi-heart">💗</div>
+      <div class="koi-fish koi-lavender"><span class="koi-eye"></span><span class="koi-tail"></span></div>
+      <p>${escapeHTML(message)}</p>
+    </div>`;
+  }
+
+  // ---------- 1 + 2: Daily Question History + Packs ----------
+
+  function openQuestionPacks() {
+    const packs = DATA.questionPacks || [];
+    openModal({ eyebrow: "QUESTION PACKS", title: "What mood are we in?", html: `
+      <div class="choice-grid">${packs.map(pack => `<button class="choice-card ${state.settings.questionPack === pack.id ? "is-active" : ""}" data-action="select-question-pack" data-id="${pack.id}"><span>${pack.icon}</span><strong>${escapeHTML(pack.label)}</strong><small>${escapeHTML(pack.description)}</small></button>`).join("")}</div>
+      <button class="button button-secondary button-block" style="margin-top:12px" data-action="add-custom-question">Write our own question ✍️</button>
+    ` });
+  }
+
+  function openAddCustomQuestion() {
+    openModal({ eyebrow: "OUR QUESTIONS", title: "Write something only you would ask", html: `
+      <form id="customQuestionForm" class="form-grid">
+        <div class="field"><label>Question</label><textarea name="text" required maxlength="280" placeholder="What should future-us never forget about this season?"></textarea></div>
+        <button class="button button-primary" type="submit">Add to Our Questions</button>
+      </form>` });
+    document.getElementById("customQuestionForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      state.customQuestions.unshift({ id: uid("cq"), pack: "custom", category: "Our Question", text: String(form.get("text") || "").trim(), createdAt: Date.now() });
+      state.settings.questionPack = "custom";
+      delete state.dailyQuestionOverrides[todayKey()];
+      delete state.answers[todayKey()];
+      saveState(); closeModal(); render(); toast("Added to Our Questions ✍️");
+    });
+  }
+
+  function renderAnswerHistory() {
+    setFab();
+    const rows = answeredDays();
+    mainView.innerHTML = `<section class="page">${subviewHeader("OUR ANSWERS", "Daily Question History", "The tiny conversations do not disappear after midnight.")}
+      <article class="card card-duo"><div class="section-heading" style="margin:0"><div><p class="eyebrow">CURRENT PACK</p><h2>${escapeHTML(currentPack().icon)} ${escapeHTML(currentPack().label)}</h2></div><button data-action="open-question-packs">Change</button></div><p class="small muted">${state.customQuestions.length} custom question${state.customQuestions.length === 1 ? "" : "s"} saved.</p></article>
+      ${rows.length ? `<div class="memory-list">${rows.map(([date, record]) => {
+        const question = questionById(record.questionId);
+        const unlocked = Boolean(record.u1?.text && record.u2?.text);
+        return `<button class="memory-item" data-action="open-answer-history-detail" data-date="${date}" style="width:100%;text-align:left;color:inherit"><div class="memory-thumb">${unlocked ? "💗" : "🔒"}</div><div><h3>${escapeHTML(question.text)}</h3><p>${featureDate(date)} · ${escapeHTML(question.category || "Daily Question")}</p></div><span>›</span></button>`;
+      }).join("")}</div>` : emptyState("No answer history yet", "Answer a daily question and it will appear here.")}
+    </section>`;
+  }
+
+  function openAnswerHistoryDetail(date) {
+    const record = state.answers?.[date];
+    if (!record) return;
+    const question = questionById(record.questionId);
+    const unlocked = Boolean(record.u1?.text && record.u2?.text);
+    openModal({ eyebrow: featureDate(date), title: question.text, html: unlocked ? `<div class="answer-grid">${answerCard(state.profiles[0], record.u1, "is-you")}${answerCard(state.profiles[1], record.u2, "is-partner")}</div>` : `<div class="answer-card is-locked"><div><div class="lock-icon">♡</div><strong>Still private</strong><p>Both people need to answer before this day unlocks.</p></div></div>` });
+  }
+
+  // ---------- 3: Little Things ----------
+
+  function renderLittleThings() {
+    setFab({ icon: "+", label: "Add little thing", action: "add-little-thing" });
+    const groups = monthlyLittleThings();
+    const monthKeys = Object.keys(groups).sort().reverse();
+    const currentMonth = todayKey().slice(0, 7);
+    mainView.innerHTML = `<section class="page">${subviewHeader("LITTLE THINGS", "The tiny things count", "Save the gestures that would otherwise disappear into an ordinary day.")}
+      <article class="card card-pink"><p class="eyebrow">THIS MONTH</p><h2>${(groups[currentMonth] || []).length} little thing${(groups[currentMonth] || []).length === 1 ? "" : "s"} noticed 💗</h2><button class="button button-secondary" data-action="surprise-little-thing">Show me one at random</button></article>
+      ${monthKeys.length ? monthKeys.map(key => `<div class="month-block"><div class="section-heading"><h2>${new Date(`${key}-01T12:00:00`).toLocaleDateString(undefined,{month:"long",year:"numeric"})}</h2><span class="micro muted">${groups[key].length} saved</span></div><div class="memory-list">${groups[key].map(item => `<div class="memory-item"><div class="memory-thumb">${item.category === "Funny" ? "😂" : "💗"}</div><div><h3>${escapeHTML(item.text)}</h3><p>${featureDate(item.date)} · ${escapeHTML(item.category || "Everyday")} · saved by ${escapeHTML(profileById(item.userId).displayName)}</p></div><button class="icon-button" data-action="delete-little-thing" data-id="${item.id}">×</button></div>`).join("")}</div></div>`).join("") : emptyState("No Little Things yet", "Notice something sweet, funny or thoughtful and save it here.")}
+    </section>`;
+  }
+
+  function openAddLittleThing() {
+    openModal({ eyebrow: "LITTLE THINGS", title: `What did ${partnerProfile().displayName} do?`, html: `<form id="littleThingForm" class="form-grid">
+      <div class="field"><label>The little thing</label><textarea name="text" required maxlength="400" placeholder="Brought me coffee without me asking."></textarea></div>
+      <div class="two-grid"><div class="field"><label>Date</label><input name="date" type="date" value="${todayKey()}"></div><div class="field"><label>Category</label><select name="category">${(DATA.littleThingCategories || ["Everyday"]).map(value => `<option>${escapeHTML(value)}</option>`).join("")}</select></div></div>
+      <button class="button button-primary" type="submit">Keep this little thing 💗</button>
+    </form>` });
+    document.getElementById("littleThingForm").addEventListener("submit", event => {
+      event.preventDefault(); const form = new FormData(event.currentTarget);
+      state.littleThings.unshift({ id: uid("lt"), text: String(form.get("text") || "").trim(), date: String(form.get("date") || todayKey()), category: String(form.get("category") || "Everyday"), userId: state.currentUserId, aboutUserId: partnerProfile().id, createdAt: Date.now() });
+      saveState(); closeModal(); render(); toast("Little thing saved 💗");
+    });
+  }
+
+  // ---------- 4: Date Jar 2.0 ----------
+
+  function dateBudgetIndex(value) {
+    const list = DATA.dateBudgets || ["Free", "Cheap", "Normal", "Treat"];
+    const index = list.indexOf(value);
+    return index < 0 ? 2 : index;
+  }
+
+  function dateMatchesFilters(item) {
+    const filters = runtime.dateFilters || { category: "All", budget: "All", setting: "All" };
+    if (filters.category !== "All" && item.category !== filters.category) return false;
+    if (filters.budget !== "All" && item.budget !== filters.budget) return false;
+    if (filters.setting !== "All" && item.setting !== filters.setting && item.setting !== "Anywhere") return false;
+    return true;
+  }
+
+  renderDateJar = function renderDateJarBuild12() {
+    setFab({ icon: "+", label: "Add date idea", action: "add-date-idea" });
+    const filtered = state.dateIdeas.filter(dateMatchesFilters);
+    const unfinished = state.dateIdeas.filter(item => !item.completed).length;
+    mainView.innerHTML = `<section class="page">${subviewHeader("DATE JAR 2.0", "Pick our next little adventure", "Filter by mood, money and setting — then let Koi choose.")}
+      <article class="card card-duo" style="text-align:center"><div class="jar"><div class="jar-hearts">${state.dateIdeas.slice(0,14).map((_,i)=>`<span>${i%2?"💜":"💗"}</span>`).join("")}</div></div><h2>${unfinished} ideas waiting</h2><button class="button button-primary" data-action="pick-date">Pick a date ✦</button><div id="datePickResult"></div></article>
+      ${dateFilterRow("category", ["All", ...(DATA.dateCategories || [])])}
+      ${dateFilterRow("budget", ["All", ...(DATA.dateBudgets || [])])}
+      ${dateFilterRow("setting", ["All", ...(DATA.dateSettings || []).filter(value => value !== "Anywhere")])}
+      <div class="memory-list">${filtered.map(item => `<div class="memory-item"><div class="memory-thumb">${item.completed ? (item.rating || "✓") : "💌"}</div><div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.category)} · ${escapeHTML(item.budget)} · ${escapeHTML(item.setting || "Anywhere")} · ${escapeHTML(item.duration || "1–2 hours")}${item.location ? ` · ${escapeHTML(item.location)}` : ""}</p></div><button class="icon-button" data-action="${item.completed ? "undo-date-v2" : "complete-date-v2"}" data-id="${item.id}">${item.completed ? "↺" : "✓"}</button></div>`).join("") || emptyState("No ideas match", "Try another filter or add a new date idea.")}</div>
+    </section>`;
+  };
+
+  function dateFilterRow(field, values) {
+    return `<div class="filter-scroll">${values.map(value => `<button class="filter-chip ${(runtime.dateFilters?.[field] || "All") === value ? "is-active" : ""}" data-action="date-filter-v2" data-field="${field}" data-value="${escapeHTML(value)}">${escapeHTML(value)}</button>`).join("")}</div>`;
+  }
+
+  openAddDateIdea = function openAddDateIdeaBuild12() {
+    openModal({ eyebrow: "DATE JAR", title: "Add an idea", html: `<form id="dateIdeaForm" class="form-grid">
+      <div class="field"><label>Date idea</label><input name="title" required maxlength="120" placeholder="Pottery class + dessert"></div>
+      <div class="two-grid"><div class="field"><label>Category</label><select name="category">${(DATA.dateCategories || []).map(value=>`<option>${escapeHTML(value)}</option>`).join("")}</select></div><div class="field"><label>Budget</label><select name="budget">${(DATA.dateBudgets || []).map(value=>`<option ${value === "Normal" ? "selected" : ""}>${escapeHTML(value)}</option>`).join("")}</select></div></div>
+      <div class="two-grid"><div class="field"><label>Setting</label><select name="setting">${(DATA.dateSettings || []).map(value=>`<option>${escapeHTML(value)}</option>`).join("")}</select></div><div class="field"><label>Time needed</label><select name="duration">${(DATA.dateDurations || []).map(value=>`<option>${escapeHTML(value)}</option>`).join("")}</select></div></div>
+      <div class="field"><label>Location / note</label><input name="location" maxlength="140" placeholder="Optional"></div>
+      <button class="button button-primary" type="submit">Drop it in the jar 💌</button>
+    </form>` });
+    document.getElementById("dateIdeaForm").addEventListener("submit", event => {
+      event.preventDefault(); const form = new FormData(event.currentTarget);
+      state.dateIdeas.unshift({ id: uid("d"), title: String(form.get("title") || "").trim(), category: String(form.get("category") || "Random"), budget: String(form.get("budget") || "Normal"), setting: String(form.get("setting") || "Anywhere"), duration: String(form.get("duration") || "1–2 hours"), location: String(form.get("location") || "").trim(), completed: false, completedAt: "", rating: "", timesDone: 0 });
+      saveState(); closeModal(); render(); toast("Added to the Date Jar");
+    });
+  };
+
+  pickDateIdea = function pickDateIdeaBuild12() {
+    const pool = state.dateIdeas.filter(item => !item.completed && dateMatchesFilters(item));
+    const result = pool[Math.floor(Math.random() * pool.length)];
+    const resultEl = document.getElementById("datePickResult");
+    if (!result) { toast("No unfinished date ideas match these filters"); return; }
+    if (resultEl) resultEl.innerHTML = `<div class="date-result"><p class="eyebrow">KOI PICKED</p><h3>${escapeHTML(result.title)}</h3><p class="small muted">${escapeHTML(result.category)} · ${escapeHTML(result.budget)} · ${escapeHTML(result.setting)} · ${escapeHTML(result.duration)}</p><button class="button button-soft" data-action="complete-date-v2" data-id="${result.id}">We did it ✓</button></div>`;
+  };
+
+  function completeDate(id) {
+    const item = state.dateIdeas.find(entry => entry.id === id); if (!item) return;
+    openModal({ eyebrow: "DATE COMPLETE", title: "How was it?", html: `<div class="choice-grid compact">${["💗 Loved it","🙂 Nice","😂 Chaotic","😅 Never again"].map(value => `<button class="choice-card" data-action="rate-date-v2" data-id="${id}" data-value="${value.split(" ")[0]}"><span>${value.split(" ")[0]}</span><strong>${escapeHTML(value.slice(value.indexOf(" ")+1))}</strong></button>`).join("")}</div>` });
+  }
+
+  function rateDate(id, rating) {
+    const item = state.dateIdeas.find(entry => entry.id === id); if (!item) return;
+    item.completed = true; item.completedAt = todayKey(); item.rating = rating; item.timesDone = Number(item.timesDone || 0) + 1;
+    state.dateCompletions.push({ id: uid("dc"), ideaId: item.id, title: item.title, category: item.category, date: todayKey(), rating });
+    saveState(); closeModal(); render(); toast("Date added to your story 💗");
+  }
+
+  // ---------- 5: Blind Date Builder ----------
+
+  function computeBlindMatch() {
+    const a = state.blindDate.preferences.u1;
+    const b = state.blindDate.preferences.u2;
+    if (!a || !b) return null;
+    const budgets = DATA.dateBudgets || ["Free","Cheap","Normal","Treat"];
+    const durations = DATA.dateDurations || ["30–60 min","1–2 hours","Half day","Full day"];
+    const budget = budgets[Math.min(dateBudgetIndex(a.budget), dateBudgetIndex(b.budget))];
+    const duration = durations[Math.min(Math.max(0,durations.indexOf(a.duration)), Math.max(0,durations.indexOf(b.duration)))];
+    const setting = a.setting === b.setting ? a.setting : (a.setting === "Anywhere" ? b.setting : (b.setting === "Anywhere" ? a.setting : "Anywhere"));
+    const category = a.category === b.category ? a.category : "Any";
+    const mood = a.mood === b.mood ? a.mood : `${a.mood} + ${b.mood}`;
+    const food = a.food === b.food ? a.food : "Flexible";
+    const matches = state.dateIdeas.filter(item => !item.completed)
+      .filter(item => dateBudgetIndex(item.budget) <= dateBudgetIndex(budget))
+      .filter(item => setting === "Anywhere" || item.setting === setting || item.setting === "Anywhere")
+      .filter(item => category === "Any" || item.category === category)
+      .slice(0, 6).map(item => item.id);
+    return { budget, duration, setting, category, mood, food, matches, createdAt: Date.now() };
+  }
+
+  function renderBlindDate() {
+    setFab();
+    const me = currentProfile(); const partner = partnerProfile();
+    const mine = state.blindDate.preferences[me.id]; const theirs = state.blindDate.preferences[partner.id];
+    const match = state.blindDate.match;
+    mainView.innerHTML = `<section class="page">${subviewHeader("BLIND DATE BUILDER", "Meet in the middle", "Choose privately. Koi only reveals the overlap after both people submit.")}
+      <article class="card card-duo"><div class="partner-status">${partnerStatusRow(me, Boolean(mine), true)}${partnerStatusRow(partner, Boolean(theirs), false)}</div><button class="button button-primary button-block" data-action="blind-date-preferences">${mine ? "Edit my private picks" : "Choose my preferences"}</button></article>
+      ${match ? `<article class="card card-lavender match-card"><p class="eyebrow">YOUR DATE FORMULA</p><h2>${escapeHTML(match.mood)}</h2><div class="tags"><span class="tag">💸 ${escapeHTML(match.budget)}</span><span class="tag">⏰ ${escapeHTML(match.duration)}</span><span class="tag">🏠 ${escapeHTML(match.setting)}</span><span class="tag">🍽️ ${escapeHTML(match.food)}</span></div><div class="section-heading"><h2>Jar matches</h2></div>${match.matches.length ? `<div class="memory-list">${match.matches.map(id => { const item = state.dateIdeas.find(entry => entry.id === id); return item ? `<div class="memory-item"><div class="memory-thumb">💌</div><div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.budget)} · ${escapeHTML(item.setting)}</p></div></div>` : ""; }).join("")}</div>` : `<p class="small muted">No saved Date Jar idea matches perfectly yet — add one inspired by this formula.</p>`}<button class="button button-secondary button-block" style="margin-top:12px" data-action="reset-blind-date">Start a new blind match</button></article>` : `<article class="card card-pink"><p class="small muted">${mine && !theirs ? `Waiting for ${escapeHTML(partner.displayName)}. Switch profiles in Us to test the second private response.` : "Both private preference cards are needed before Koi reveals the overlap."}</p></article>`}
+    </section>`;
+  }
+
+  function openBlindPreferences() {
+    const current = state.blindDate.preferences[state.currentUserId] || {};
+    openModal({ eyebrow: "PRIVATE PICKS", title: `${currentProfile().displayName}’s date mood`, html: `<form id="blindDateForm" class="form-grid">
+      <div class="two-grid"><div class="field"><label>Mood</label><select name="mood">${(DATA.dateMoods || []).map(value=>`<option ${current.mood===value?"selected":""}>${escapeHTML(value)}</option>`).join("")}</select></div><div class="field"><label>Budget max</label><select name="budget">${(DATA.dateBudgets || []).map(value=>`<option ${current.budget===value?"selected":""}>${escapeHTML(value)}</option>`).join("")}</select></div></div>
+      <div class="two-grid"><div class="field"><label>Setting</label><select name="setting">${(DATA.dateSettings || []).map(value=>`<option ${current.setting===value?"selected":""}>${escapeHTML(value)}</option>`).join("")}</select></div><div class="field"><label>Time</label><select name="duration">${(DATA.dateDurations || []).map(value=>`<option ${current.duration===value?"selected":""}>${escapeHTML(value)}</option>`).join("")}</select></div></div>
+      <div class="two-grid"><div class="field"><label>Category</label><select name="category">${(DATA.dateCategories || []).map(value=>`<option ${current.category===value?"selected":""}>${escapeHTML(value)}</option>`).join("")}</select></div><div class="field"><label>Food involved?</label><select name="food">${["Yes","Maybe","No preference"].map(value=>`<option ${current.food===value?"selected":""}>${value}</option>`).join("")}</select></div></div>
+      <button class="button button-primary" type="submit">Save privately</button>
+    </form>` });
+    document.getElementById("blindDateForm").addEventListener("submit", event => {
+      event.preventDefault(); const form = new FormData(event.currentTarget);
+      state.blindDate.preferences[state.currentUserId] = Object.fromEntries(["mood","budget","setting","duration","category","food"].map(key => [key, String(form.get(key) || "")]));
+      state.blindDate.updatedAt = Date.now();
+      state.blindDate.match = computeBlindMatch();
+      saveState(); closeModal(); render(); toast(state.blindDate.match ? "Your overlap unlocked 💗" : "Saved privately");
+    });
+  }
+
+  // ---------- 6: I Bet You ----------
+
+  function predictionStats() {
+    const resolved = state.predictions.filter(item => item.actual);
+    const matches = resolved.filter(item => item.guess === item.actual).length;
+    return { resolved: resolved.length, matches, percent: resolved.length ? Math.round(matches / resolved.length * 100) : 0 };
+  }
+
+  function renderPredictions() {
+    setFab();
+    const stats = predictionStats();
+    const openRound = [...state.predictions].reverse().find(item => !item.actual);
+    mainView.innerHTML = `<section class="page">${subviewHeader("I BET YOU", "How well can you predict your person?", "A playful mind-reader game, not a relationship score.")}
+      <div class="stat-grid"><div class="stat-card"><strong>${stats.matches}</strong><span>Exact reads</span></div><div class="stat-card"><strong>${stats.resolved}</strong><span>Rounds</span></div><div class="stat-card"><strong>${stats.percent}%</strong><span>Mind-reader rate</span></div></div>
+      ${openRound ? renderOpenPrediction(openRound) : `<article class="card card-duo" style="text-align:center">${renderKoiPair("Ready to test your mind-reading powers?")}<button class="button button-primary" data-action="new-prediction">Start a round 🔮</button></article>`}
+      <div class="section-heading"><h2>Past rounds</h2></div><div class="memory-list">${state.predictions.filter(item=>item.actual).slice().reverse().slice(0,10).map(item => `<div class="memory-item"><div class="memory-thumb">${item.guess===item.actual?"✨":"👀"}</div><div><h3>${escapeHTML(item.prompt)}</h3><p>Guessed ${escapeHTML(item.guess)} · Answer was ${escapeHTML(item.actual)}</p></div></div>`).join("") || `<p class="small muted">No completed rounds yet.</p>`}</div>
+    </section>`;
+  }
+
+  function renderOpenPrediction(round) {
+    const target = profileById(round.targetUserId); const predictor = profileById(round.predictorUserId);
+    if (state.currentUserId === round.targetUserId) {
+      return `<article class="card card-pink"><p class="eyebrow">${escapeHTML(predictor.displayName)} MADE A PREDICTION</p><h2>${escapeHTML(round.prompt)}</h2><p class="small muted">Choose your real answer. Their guess stays hidden until you answer.</p><div class="choice-grid compact">${round.options.map(value => `<button class="choice-card" data-action="prediction-answer" data-id="${round.id}" data-value="${escapeHTML(value)}"><strong>${escapeHTML(value)}</strong></button>`).join("")}</div></article>`;
+    }
+    return `<article class="card card-lavender" style="text-align:center"><p class="eyebrow">WAITING FOR ${escapeHTML(target.displayName).toUpperCase()}</p><h2>${escapeHTML(round.prompt)}</h2><div class="answer-card is-locked"><div><div class="lock-icon">🔮</div><p>Your guess is sealed until they answer.</p></div></div></article>`;
+  }
+
+  function openNewPrediction() {
+    const prompts = DATA.predictionPrompts || [];
+    const prompt = prompts[state.predictions.length % Math.max(1, prompts.length)];
+    if (!prompt) { toast("No prediction prompts found in data.js"); return; }
+    openModal({ eyebrow: "I BET YOU", title: prompt.prompt, html: `<form id="predictionForm" class="form-grid"><p class="small muted">Predict what ${escapeHTML(partnerProfile().displayName)} will choose.</p><div class="choice-grid compact">${prompt.options.map((value,index)=>`<label class="radio-card"><input type="radio" name="guess" value="${escapeHTML(value)}" ${index===0?"required":""}><span>${escapeHTML(value)}</span></label>`).join("")}</div><button class="button button-primary" type="submit">Lock my prediction 🔮</button></form>` });
+    document.getElementById("predictionForm").addEventListener("submit", event => {
+      event.preventDefault(); const form = new FormData(event.currentTarget);
+      state.predictions.push({ id: uid("pr"), promptId: prompt.id, prompt: prompt.prompt, options: prompt.options, predictorUserId: state.currentUserId, targetUserId: partnerProfile().id, guess: String(form.get("guess") || ""), actual: "", createdAt: Date.now() });
+      saveState(); closeModal(); render(); toast("Prediction locked 🔮");
+    });
+  }
+
+  // ---------- 7: Relationship Lore 2.0 ----------
+
+  renderLoreList = function renderLoreListBuild12() {
+    const categories = [{ id: "All", label: "All", icon: "📖" }, ...(DATA.loreCategories || [])];
+    const items = runtime.loreFilter === "All" ? state.lore : state.lore.filter(item => item.category === runtime.loreFilter);
+    return `<article class="card card-duo"><div class="section-heading" style="margin:0"><div><p class="eyebrow">THE LORE BOOK</p><h2>${state.lore.length} legends archived</h2></div><button data-action="random-lore">Random Lore</button></div></article><div class="filter-scroll">${categories.map(cat => `<button class="filter-chip ${runtime.loreFilter===cat.id?"is-active":""}" data-action="lore-filter" data-value="${cat.id}">${cat.icon} ${escapeHTML(cat.label)}</button>`).join("")}</div>${items.length ? `<div class="memory-list">${items.map(item => { const cat=(DATA.loreCategories||[]).find(c=>c.id===item.category); return `<button class="memory-item" data-action="open-lore" data-id="${item.id}" style="width:100%;text-align:left;color:inherit"><div class="memory-thumb">${item.photo?`<img src="${item.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:15px">`:escapeHTML(item.icon || cat?.icon || "📖")}</div><div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(cat?.label || "Relationship Lore")}${item.dateEstablished?` · since ${featureDate(item.dateEstablished)}`:""}</p><div class="tags" style="margin-top:6px">${(item.tags||[]).slice(0,2).map(tag=>`<span class="tag">${escapeHTML(tag)}</span>`).join("")}</div></div><span>›</span></button>`; }).join("")}</div>` : emptyState("No lore in this category", "Add a story, quote, food incident or chaotic moment.")}`;
+  };
+
+  openAddLore = function openAddLoreBuild12(existingId = "") {
+    const item = state.lore.find(entry => entry.id === existingId) || {};
+    openModal({ eyebrow: "RELATIONSHIP LORE", title: existingId ? "Edit the legend" : "Archive a legend", html: `<form id="loreForm" class="form-grid">
+      <div class="two-grid"><div class="field"><label>Icon</label><input name="icon" maxlength="4" value="${escapeHTML(item.icon || "📖")}"></div><div class="field"><label>Category</label><select name="category">${(DATA.loreCategories || []).map(cat=>`<option value="${cat.id}" ${item.category===cat.id?"selected":""}>${cat.icon} ${escapeHTML(cat.label)}</option>`).join("")}</select></div></div>
+      <div class="field"><label>Title</label><input name="title" required maxlength="100" value="${escapeHTML(item.title || "")}" placeholder="The Chicken Incident"></div>
+      <div class="field"><label>Origin</label><textarea name="origin" required maxlength="1000">${escapeHTML(item.origin || "")}</textarea></div>
+      <div class="field"><label>What it means now</label><textarea name="meaning" required maxlength="800">${escapeHTML(item.meaning || "")}</textarea></div>
+      <div class="two-grid"><div class="field"><label>Lore established</label><input name="dateEstablished" type="date" value="${escapeHTML(item.dateEstablished || "")}"></div><div class="field"><label>Era</label><select name="eraId"><option value="">Auto / Current</option>${state.eras.map(era=>`<option value="${era.id}" ${item.eraId===era.id?"selected":""}>${escapeHTML(era.emoji)} ${escapeHTML(era.title)}</option>`).join("")}</select></div></div>
+      <div class="field"><label>Tags</label><input name="tags" value="${escapeHTML((item.tags || []).join(", "))}" placeholder="Food, Tokyo, Inside Joke"></div>
+      <div class="field"><label>Photo (optional)</label><input name="photo" type="file" accept="image/*"></div>
+      <button class="button button-primary" type="submit">${existingId ? "Save changes" : "Add to The Lore Book"}</button>
+    </form>` });
+    document.getElementById("loreForm").addEventListener("submit", async event => {
+      event.preventDefault(); const formEl=event.currentTarget; const form=new FormData(formEl); const file=formEl.elements.photo?.files?.[0]; let photo=item.photo || "";
+      if (file) { try { photo=await compressImage(file); } catch { toast("Photo could not be processed"); } }
+      const payload={ title:String(form.get("title")||"").trim(), origin:String(form.get("origin")||"").trim(), meaning:String(form.get("meaning")||"").trim(), category:String(form.get("category")||"inside-joke"), dateEstablished:String(form.get("dateEstablished")||""), eraId:String(form.get("eraId")||""), tags:String(form.get("tags")||"").split(",").map(v=>v.trim()).filter(Boolean).slice(0,8), icon:String(form.get("icon")||"📖").trim()||"📖", photo };
+      if (existingId) Object.assign(item,payload); else state.lore.unshift({ id:uid("l"), ...payload, createdAt:Date.now() });
+      saveState(); closeModal(); runtime.memoryTab="lore"; navigate("memories"); toast("Lore archived 📖");
+    });
+  };
+
+  openLore = function openLoreBuild12(id) {
+    const item=state.lore.find(entry=>entry.id===id); if(!item)return; const cat=(DATA.loreCategories||[]).find(c=>c.id===item.category); const era=state.eras.find(e=>e.id===item.eraId);
+    openModal({ eyebrow: `${cat?.icon || "📖"} ${cat?.label || "RELATIONSHIP LORE"}`, title:item.title, html:`${item.photo?`<img src="${item.photo}" alt="" style="width:100%;max-height:260px;object-fit:cover;border-radius:20px;margin-bottom:12px">`:""}<article class="card card-pink"><p class="eyebrow">ORIGIN${item.dateEstablished?` · ${featureDate(item.dateEstablished)}`:""}</p><p>${escapeHTML(item.origin)}</p></article><article class="card card-lavender"><p class="eyebrow">CURRENT MEANING</p><p>${escapeHTML(item.meaning)}</p></article>${era?`<span class="pill pill-lavender">${escapeHTML(era.emoji)} ${escapeHTML(era.title)}</span>`:""}<div class="tags" style="margin-top:10px">${(item.tags||[]).map(tag=>`<span class="tag">${escapeHTML(tag)}</span>`).join("")}</div><div class="two-grid" style="margin-top:14px"><button class="button button-secondary" data-action="edit-lore" data-id="${item.id}">Edit</button><button class="button button-ghost" data-action="delete-lore" data-id="${item.id}">Delete</button></div>` });
+  };
+
+  // ---------- 8: Our Canon challenges ----------
+
+  renderCanon = function renderCanonBuild12() {
+    setFab({ icon: "+", label: "Add canon", action: "add-canon" });
+    mainView.innerHTML = `<section class="page">${subviewHeader("OUR CANON", "The official facts of us", "Favorites, sayings, rules, current obsessions — and the occasional challenge.")}
+      <div class="memory-list">${state.canon.map(item => `<div class="memory-item canon-item"><div class="memory-thumb">${item.challenge ? "👀" : "📖"}</div><div><h3>${escapeHTML(item.category)}</h3><p>${escapeHTML(item.text)}</p>${item.challenge?`<div class="challenge-box"><small>Challenged by ${escapeHTML(profileById(item.challenge.by).displayName)}</small><strong>Proposed: ${escapeHTML(item.challenge.proposed)}</strong></div>`:""}</div><div class="stack-actions">${item.challenge ? (item.challenge.by !== state.currentUserId ? `<button class="tiny-button" data-action="resolve-canon-accept" data-id="${item.id}">Accept</button><button class="tiny-button" data-action="resolve-canon-keep" data-id="${item.id}">Keep</button>` : `<span class="micro muted">Waiting</span>`) : `<button class="tiny-button" data-action="challenge-canon" data-id="${item.id}">Challenge</button>`}<button class="icon-button" data-action="delete-canon" data-id="${item.id}">×</button></div></div>`).join("") || emptyState("No canon yet", "Declare something official.")}</div>
+    </section>`;
+  };
+
+  function openCanonChallenge(id) {
+    const item=state.canon.find(entry=>entry.id===id); if(!item)return;
+    openModal({ eyebrow:"CHALLENGE THE CANON", title:item.category, html:`<form id="canonChallengeForm" class="form-grid"><article class="card card-lavender"><strong>Current:</strong><p>${escapeHTML(item.text)}</p></article><div class="field"><label>Your proposed new answer</label><input name="proposed" required maxlength="200"></div><button class="button button-primary" type="submit">Issue challenge 👀</button></form>` });
+    document.getElementById("canonChallengeForm").addEventListener("submit",event=>{event.preventDefault();const form=new FormData(event.currentTarget);item.challenge={by:state.currentUserId,proposed:String(form.get("proposed")||"").trim(),createdAt:Date.now()};saveState();closeModal();render();toast("Canon challenged 👀");});
+  }
+
+  // ---------- 9: Accidental Traditions ----------
+
+  function traditionSuggestions() {
+    const dismissed=new Set(state.dismissedTraditionSuggestions || []); const existing=new Set(state.traditions.map(item=>normalizeText(item.title))); const suggestions=[];
+    const completedGroups={}; state.dateCompletions.forEach(item=>{const key=normalizeText(item.title); if(!key)return; completedGroups[key] ||= {title:item.title,count:0}; completedGroups[key].count+=1;});
+    Object.entries(completedGroups).forEach(([key,group])=>{const id=`date:${key}`;if(group.count>=2&&!dismissed.has(id)&&!existing.has(key))suggestions.push({id,title:group.title,count:group.count,reason:`You have done this date ${group.count} times.`});});
+    const tagCounts={}; state.memories.forEach(item=>(item.tags||[]).forEach(tag=>{const key=normalizeText(tag);if(!key)return;tagCounts[key] ||= {label:tag,count:0};tagCounts[key].count+=1;}));
+    Object.entries(tagCounts).forEach(([key,group])=>{const title=`${group.label} days`;const id=`tag:${key}`;if(group.count>=3&&!dismissed.has(id)&&!existing.has(normalizeText(title)))suggestions.push({id,title,count:group.count,reason:`${group.count} memories share the “${group.label}” tag.`});});
+    const places={}; state.memories.forEach(item=>{const key=normalizeText(item.location);if(!key)return;places[key] ||= {label:item.location,count:0};places[key].count+=1;});
+    Object.entries(places).forEach(([key,group])=>{const title=`${group.label} dates`;const id=`place:${key}`;if(group.count>=3&&!dismissed.has(id)&&!existing.has(normalizeText(title)))suggestions.push({id,title,count:group.count,reason:`You have saved ${group.count} memories at ${group.label}.`});});
+    return suggestions.slice(0,6);
+  }
+
+  renderTraditions = function renderTraditionsBuild12() {
+    setFab({ icon: "+", label: "Add tradition", action: "add-tradition" }); const suggestions=traditionSuggestions();
+    mainView.innerHTML=`<section class="page">${subviewHeader("TRADITIONS", "The little things we keep doing", "Koi can now notice repeated activities and suggest when something might be becoming ‘our thing.’")}
+      ${suggestions.length?`<article class="card card-duo"><p class="eyebrow">THIS MIGHT BE BECOMING A THING…</p>${suggestions.map(item=>`<div class="suggestion-row"><div><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.reason)}</small></div><div><button class="tiny-button" data-action="adopt-tradition" data-id="${escapeHTML(item.id)}">Make tradition</button><button class="tiny-button" data-action="dismiss-tradition-suggestion" data-id="${escapeHTML(item.id)}">Not yet</button></div></div>`).join("")}</article>`:""}
+      <div class="memory-list">${state.traditions.map(item=>`<div class="memory-item"><div class="memory-thumb">🎀</div><div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.cadence)} · ${item.count} times · since ${escapeHTML(formatShortDate(item.startDate))}${item.source==="suggested"?" · discovered by Koi":""}</p></div><button class="icon-button" data-action="increment-tradition" data-id="${item.id}">+1</button></div>`).join("") || emptyState("No traditions yet","Add something you hope becomes ‘our thing.’")}</div>
+    </section>`;
+  };
+
+  // ---------- 10: Then vs Now 2.0 ----------
+
+  openAddThenNow = function openAddThenNowBuild12() {
+    const future=new Date();future.setMonth(future.getMonth()+6);const revisit=future.toLocaleDateString("en-CA");
+    openModal({eyebrow:"THEN VS NOW",title:"Save a question for future-you",html:`<form id="thenNowForm" class="form-grid"><div class="field"><label>Question</label><input name="prompt" required maxlength="220" placeholder="Where do we imagine living in five years?"></div><div class="field"><label>Your answer now</label><textarea name="oldAnswer" required maxlength="900"></textarea></div><div class="field"><label>Ask me again on</label><input name="revisitDate" type="date" value="${revisit}"></div><button class="button button-primary" type="submit">Save for later</button></form>`});
+    document.getElementById("thenNowForm").addEventListener("submit",event=>{event.preventDefault();const form=new FormData(event.currentTarget);state.thenNow.unshift({id:uid("tn"),prompt:String(form.get("prompt")||"").trim(),oldDate:todayKey(),oldAnswer:String(form.get("oldAnswer")||"").trim(),revisitDate:String(form.get("revisitDate")||""),newAnswer:"",completedAt:""});saveState();closeModal();render();toast("Future Koi will ask again ✦");});
+  };
+
+  renderThenNow = function renderThenNowBuild12() {
+    setFab({icon:"+",label:"Add comparison",action:"add-then-now"});
+    mainView.innerHTML=`<section class="page">${subviewHeader("THEN VS NOW","See how your answers grow","Your earlier answer stays hidden until you answer again.")}${state.thenNow.map(item=>{const due=!item.revisitDate||item.revisitDate<=todayKey();return `<article class="card card-duo"><div class="section-heading" style="margin:0 0 8px"><p class="eyebrow">THEN · ${escapeHTML(featureDate(item.oldDate))}</p><span class="pill ${due?"pill-pink":"pill-lavender"}">${item.newAnswer?"Compared":due?"Ready":"Revisit "+featureDate(item.revisitDate)}</span></div><h2>${escapeHTML(item.prompt)}</h2>${item.newAnswer?`<div class="answer-grid" style="margin-top:12px"><div class="answer-card is-you"><strong>Then</strong><p>${escapeHTML(item.oldAnswer)}</p></div><div class="answer-card is-partner"><strong>Now</strong><p>${escapeHTML(item.newAnswer)}</p></div></div><button class="button button-secondary button-block" style="margin-top:10px" data-action="revisit-then-now" data-id="${item.id}">Make this the new “then”</button>`:`<div class="answer-card is-locked" style="margin-top:12px"><div><div class="lock-icon">♡</div><p>Your old answer is still hidden.</p><button class="button button-primary" data-action="answer-then-now" data-id="${item.id}">Answer again</button></div></div>`}</article>`;}).join("") || emptyState("Nothing to compare yet","Save a prompt you want future-you to revisit.")}</section>`;
+  };
+
+  // ---------- 11: Relationship Eras ----------
+
+  function renderEras() {
+    setFab({icon:"+",label:"Add era",action:"add-era"});
+    const active=activeEra();
+    mainView.innerHTML=`<section class="page">${subviewHeader("OUR ERAS","Versions of us","Name the chapters yourselves — serious, sentimental or completely ridiculous.")}
+      ${active?`<article class="card card-duo"><p class="eyebrow">CURRENT ERA</p><h2>${escapeHTML(active.emoji)} ${escapeHTML(active.title)}</h2><p class="small muted">${escapeHTML(active.description||"")}</p></article>`:""}
+      <div class="era-grid">${state.eras.slice().sort((a,b)=>(b.startDate||"").localeCompare(a.startDate||"")).map(era=>{const count=state.memories.filter(item=>item.eraId===era.id || (!item.eraId && eraForDate(item.date)?.id===era.id)).length;return `<article class="era-card ${era.id===state.activeEraId?"is-active":""}"><div class="era-emoji">${escapeHTML(era.emoji||"✨")}</div><div><h3>${escapeHTML(era.title)}</h3><p>${escapeHTML(featureDate(era.startDate))}${era.endDate?` – ${escapeHTML(featureDate(era.endDate))}`:" – now"}</p><small>${count} memories · ${escapeHTML(era.description||"")}</small></div><div class="stack-actions">${era.id!==state.activeEraId?`<button class="tiny-button" data-action="set-active-era" data-id="${era.id}">Make current</button>`:`<span class="pill pill-pink">Current</span>`}<button class="tiny-button" data-action="edit-era" data-id="${era.id}">Edit</button></div></article>`;}).join("")}</div>
+    </section>`;
+  }
+
+  function openEraForm(id="") {
+    const era=state.eras.find(item=>item.id===id)||{};
+    openModal({eyebrow:"RELATIONSHIP ERA",title:id?"Edit this chapter":"Name this chapter",html:`<form id="eraForm" class="form-grid"><div class="two-grid"><div class="field"><label>Emoji</label><input name="emoji" maxlength="4" value="${escapeHTML(era.emoji||"✨")}"></div><div class="field"><label>Era name</label><input name="title" required maxlength="80" value="${escapeHTML(era.title||"")}" placeholder="Japan Brainrot Era"></div></div><div class="two-grid"><div class="field"><label>Started</label><input name="startDate" type="date" value="${escapeHTML(era.startDate||todayKey())}"></div><div class="field"><label>Ended (optional)</label><input name="endDate" type="date" value="${escapeHTML(era.endDate||"")}"></div></div><div class="field"><label>What was this era?</label><textarea name="description" maxlength="400">${escapeHTML(era.description||"")}</textarea></div><button class="button button-primary" type="submit">Save era</button></form>`});
+    document.getElementById("eraForm").addEventListener("submit",event=>{event.preventDefault();const form=new FormData(event.currentTarget);const payload={emoji:String(form.get("emoji")||"✨").trim()||"✨",title:String(form.get("title")||"").trim(),startDate:String(form.get("startDate")||""),endDate:String(form.get("endDate")||""),description:String(form.get("description")||"").trim()};if(id)Object.assign(era,payload);else state.eras.unshift({id:uid("era"),...payload,active:false});saveState();closeModal();render();toast("Era saved ✨");});
+  }
+
+  memoryFormHTML = function memoryFormHTMLBuild12(item = {}, { twoSides = false } = {}) {
+    const selectedEra=item.eraId || activeEra()?.id || "";
+    return `<form id="memoryForm" class="form-grid"><div class="field"><label>Title</label><input name="title" required maxlength="100" value="${escapeHTML(item.title||"")}" placeholder="Coffee date"></div><div class="two-grid"><div class="field"><label>Date</label><input name="date" type="date" value="${escapeHTML(item.date||todayKey())}"></div><div class="field"><label>Location</label><input name="location" maxlength="120" value="${escapeHTML(item.location||"")}" placeholder="Optional"></div></div><div class="field"><label>${twoSides?"Shared context":"Note"}</label><textarea name="note" maxlength="900">${escapeHTML(item.note||"")}</textarea></div><div class="two-grid"><div class="field"><label>Era</label><select name="eraId"><option value="">Auto by date</option>${state.eras.map(era=>`<option value="${era.id}" ${selectedEra===era.id?"selected":""}>${escapeHTML(era.emoji)} ${escapeHTML(era.title)}</option>`).join("")}</select></div><div class="field"><label>Chapter / shelf</label><input name="chapter" maxlength="60" value="${escapeHTML(item.chapter||"Little Days")}"></div></div><div class="field"><label>Tags</label><input name="tags" value="${escapeHTML((item.tags||[]).join(", "))}"></div><div class="field"><label>Photo (optional, compressed locally)</label><input name="photo" type="file" accept="image/*"></div>${twoSides?`<div class="field"><label>Your private side</label><textarea name="side" required maxlength="900">${escapeHTML(item.sides?.[state.currentUserId]?.text||"")}</textarea></div>`:""}<button class="button button-primary" type="submit">Save ${twoSides?"my side":"memory"}</button></form>`;
+  };
+
+  bindMemoryForm = function bindMemoryFormBuild12({ type, existingId = "" }) {
+    document.getElementById("memoryForm").addEventListener("submit", async event => {
+      event.preventDefault(); const form=event.currentTarget; const data=new FormData(form); const file=form.elements.photo?.files?.[0]; let photo=existingId?state.memories.find(item=>item.id===existingId)?.photo||"":""; if(file){try{photo=await compressImage(file);}catch{toast("Photo could not be processed");}}
+      const tags=String(data.get("tags")||"").split(",").map(value=>value.trim()).filter(Boolean).slice(0,8); const payload={title:String(data.get("title")||"").trim(),date:String(data.get("date")||""),location:String(data.get("location")||"").trim(),note:String(data.get("note")||"").trim(),chapter:String(data.get("chapter")||"Little Days").trim(),eraId:String(data.get("eraId")||""),tags,photo};
+      if(existingId){const item=state.memories.find(entry=>entry.id===existingId);if(!item)return;Object.assign(item,payload);if(type==="two-sides"){item.sides ||= {};item.sides[state.currentUserId]={text:String(data.get("side")||"").trim(),submittedAt:Date.now()};}}
+      else {const item={id:uid("m"),type,...payload,icon:type==="two-sides"?"♡♡":"💗",createdAt:Date.now()};if(type==="two-sides")item.sides={[state.currentUserId]:{text:String(data.get("side")||"").trim(),submittedAt:Date.now()}};state.memories.unshift(item);}
+      saveState();closeModal();runtime.memoryTab=type==="two-sides"?"two-sides":"memories";navigate("memories");toast(type==="two-sides"?"Your side was saved privately":"Memory added to Our Museum");
+    });
+  };
+
+  // ---------- 12: Richer Our Museum ----------
+
+  renderMuseum = function renderMuseumBuild12() {
+    const filter=runtime.museumKindFilter || "All";
+    const exhibits=[];
+    state.memories.forEach(item=>exhibits.push({kind:"memory",id:item.id,title:item.title,date:item.date,eraId:item.eraId,chapter:item.chapter,photo:item.photo,icon:item.icon||"💗",subtitle:item.type==="two-sides"?"Same Moment, Two Sides":item.location||item.chapter||"Memory"}));
+    state.lore.forEach(item=>exhibits.push({kind:"lore",id:item.id,title:item.title,date:item.dateEstablished,eraId:item.eraId,chapter:"The Lore Book",photo:item.photo,icon:item.icon||"📖",subtitle:"Relationship Lore"}));
+    state.littleThings.forEach(item=>exhibits.push({kind:"little",id:item.id,title:item.text,date:item.date,eraId:"",chapter:"Little Things",photo:"",icon:"💗",subtitle:`Little Thing · ${item.category||"Everyday"}`}));
+    const visible=filter==="All"?exhibits:exhibits.filter(item=>filter==="Memories"?item.kind==="memory":filter==="Lore"?item.kind==="lore":item.kind==="little");
+    const grouped={}; visible.forEach(item=>{const era=state.eras.find(e=>e.id===item.eraId)||eraForDate(item.date);const key=era?.id||"ungrouped";grouped[key] ||= {era,items:[]};grouped[key].items.push(item);});
+    return `<article class="card card-lavender"><p class="eyebrow">OUR MUSEUM</p><h2>Your relationship, curated like it mattered — because it did.</h2><p class="small muted">Memories, Lore and Little Things become exhibits automatically.</p></article><div class="filter-scroll">${["All","Memories","Lore","Little Things"].map(value=>`<button class="filter-chip ${filter===value?"is-active":""}" data-action="museum-filter" data-value="${value}">${value}</button>`).join("")}</div>${Object.values(grouped).map(group=>`<section class="museum-section"><div class="museum-section-title"><div><p class="eyebrow">${group.era?escapeHTML(featureDate(group.era.startDate)):"MISCELLANEOUS"}</p><h2>${group.era?`${escapeHTML(group.era.emoji)} ${escapeHTML(group.era.title)}`:"Other Exhibits"}</h2></div><span class="pill pill-lavender">${group.items.length} exhibits</span></div><div class="museum-grid">${group.items.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(item=>`<button class="exhibit" data-action="open-exhibit" data-kind="${item.kind}" data-id="${item.id}"><div class="frame">${item.photo?`<img src="${item.photo}" alt="">`:escapeHTML(item.icon)}</div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.subtitle)}</p></button>`).join("")}</div></section>`).join("") || emptyState("Your museum is waiting","Save a memory, lore entry or Little Thing to create your first exhibit.")}`;
+  };
+
+  openExhibit = function openExhibitBuild12(kind,id) {
+    if(kind==="little"){const item=state.littleThings.find(entry=>entry.id===id);if(!item)return;openModal({eyebrow:"LITTLE THING",title:featureDate(item.date),html:`<article class="card card-pink"><h2>${escapeHTML(item.text)}</h2><p class="small muted">${escapeHTML(item.category||"Everyday")} · saved by ${escapeHTML(profileById(item.userId).displayName)}</p></article>`});return;}
+    baseOpenExhibit(kind,id);
+  };
+
+  // ---------- 13 + 14: Room progression + Koi mascots ----------
+
+  renderRoom = function renderRoomBuild12() {
+    setFab(); const points=relationshipPoints(); const active=new Set(state.room.activeDecor||[]); const unlocked=new Set(roomUnlockedDecor()); const next=nextRoomUnlock(); const unlocks=DATA.roomUnlocks||[]; const month=new Date().getMonth(); const seasonal=month===11?"🎄 Holiday glow":month>=2&&month<=4?"🌸 Spring petals":month>=5&&month<=7?"🌿 Summer light":"🍁 Cozy season";
+    mainView.innerHTML=`<section class="page">${subviewHeader("OUR COZY CORNER","Our Room","Every question, memory, date and tiny ritual helps this space grow.",`<span class="pill pill-lavender">Lv. ${roomLevel()}</span>`)}
+      <article class="card card-duo"><div class="section-heading" style="margin:0"><div><p class="eyebrow">COZY PROGRESS</p><h2>${points} Koi points</h2></div><span class="pill pill-pink">${seasonal}</span></div><div class="progress-bar" style="margin-top:10px"><span style="width:${next?Math.min(100,points/Number(next.points||1)*100):100}%"></span></div><p class="small muted">${next?`${Math.max(0,next.points-points)} points until ${next.icon} ${escapeHTML(next.label)}.`:"Everything in Build 1.2 is unlocked ✨"}</p></article>
+      <div class="room-scene room-scene-v2">${active.has("lights")?`<div class="room-wall-lights">✦ · ✧ · ✦ · ✧ · ✦</div>`:""}${active.has("frame")?`<div class="room-frame">${escapeHTML(state.profiles[0].displayName)} & ${escapeHTML(state.profiles[1].displayName)}<br>our little us</div>`:""}${active.has("moonlamp")?`<div class="moon-lamp">🌙</div>`:""}<div class="room-shelf"></div><div class="room-items"><span>${active.has("books")?"📚":""}</span><span>${active.has("camera")?"📷":""}</span><span>${active.has("plant")?"🪴":""}</span><span>${active.has("souvenir")?"🎟️":""}</span></div><div class="room-floor-items"><span>${active.has("heart")?"💗":""}</span><span>${active.has("plush")?"🧸":""}</span></div>${active.has("pond")?`<div class="room-pond">${renderKoiPair("")}</div>`:`<div class="room-mascot-floating">${renderKoiPair("")}</div>`}</div>
+      <article class="card card-pink"><div class="section-heading" style="margin:0"><div><p class="eyebrow">YOUR KOI</p><h2>${escapeHTML(state.room.mascots.pinkName)} + ${escapeHTML(state.room.mascots.lavenderName)}</h2></div><button data-action="edit-mascots">Name them</button></div><p class="small muted">The pink and lavender koi are Koi’s little mascots. They react to milestones and live in your shared room.</p></article>
+      <div class="section-heading"><h2>Decor & unlocks</h2><span class="micro muted">tap unlocked items</span></div><div class="decor-grid">${unlocks.map(item=>`<button class="decor-button ${active.has(item.id)?"is-active":""}" data-action="toggle-decor" data-id="${item.id}" ${unlocked.has(item.id)?"":"disabled"}>${item.icon}<br>${escapeHTML(item.label)}${unlocked.has(item.id)?"":` · ${item.points} pts 🔒`}</button>`).join("")}</div>
+    </section>`;
+  };
+
+  function openMascotNames() {
+    openModal({eyebrow:"KOI MASCOTS",title:"Name your two little koi",html:`<form id="mascotForm" class="form-grid"><div class="two-grid"><div class="field"><label>Pink koi</label><input name="pinkName" maxlength="30" value="${escapeHTML(state.room.mascots.pinkName)}"></div><div class="field"><label>Lavender koi</label><input name="lavenderName" maxlength="30" value="${escapeHTML(state.room.mascots.lavenderName)}"></div></div>${renderKoiPair("They stay pink + lavender, just like your Koi motif.")}<button class="button button-primary" type="submit">Save names</button></form>`});
+    document.getElementById("mascotForm").addEventListener("submit",event=>{event.preventDefault();const form=new FormData(event.currentTarget);state.room.mascots.pinkName=String(form.get("pinkName")||"Pink Koi").trim();state.room.mascots.lavenderName=String(form.get("lavenderName")||"Lavender Koi").trim();saveState();closeModal();render();toast("Your koi have names 🐟💗");});
+  }
+
+  // ---------- Home + Extras + Museum integrations ----------
+
+  renderHome = function renderHomeBuild12() {
+    const me=currentProfile(); const partner=partnerProfile(); const question=dailyQuestion(); const record=todayAnswerRecord(); const mine=record[me.id]; const partnerAnswer=record[partner.id]; const reveal=bothAnswered(record); const days=daysBetween(state.pair.anniversary); const lastCheckin=[...state.checkins].reverse().find(item=>item.userId===partner.id); const pack=currentPack(); const latestLittle=state.littleThings[0];
+    setFab();
+    mainView.innerHTML=`<section class="page"><div class="page-header"><div><p class="eyebrow">TODAY · ${escapeHTML(formatShortDate(todayKey()))}</p><h1>Good ${greeting()}, ${escapeHTML(me.displayName)} 💗</h1><p>One tiny ritual for your little us.</p></div><span class="pill pill-lavender">♡ ${days} days</span></div>
+      <article class="card card-duo hero-question"><div class="question-meta"><button class="pill pill-pink interactive-pill" data-action="open-question-packs">${escapeHTML(pack.icon)} ${escapeHTML(pack.label)} ▾</button><span class="pill pill-lavender">${escapeHTML(question.category)}</span></div><h2 class="question-text">${escapeHTML(question.text)}</h2><div class="partner-status">${partnerStatusRow(me,Boolean(mine),true)}${partnerStatusRow(partner,Boolean(partnerAnswer),false)}</div>${reveal?`<div class="answer-grid">${answerCard(me,record[me.id],"is-you")}${answerCard(partner,record[partner.id],"is-partner")}</div><div class="reaction-row">${["💗","🥹","😂","🫶","👀"].map(emoji=>`<button class="reaction-button ${state.reactions[`${todayKey()}_${me.id}`]===emoji?"is-active":""}" data-action="react-answer" data-value="${emoji}">${emoji}</button>`).join("")}</div>`:`<button class="button button-primary button-block" data-action="answer-question">${mine?"Edit my private answer":"Answer privately"} 💌</button><button class="button button-ghost button-block" style="margin-top:8px" data-action="skip-question">Skip this question</button><p class="small muted" style="text-align:center;margin:10px 0 0">Both answers unlock together.</p>`}<div class="inline-actions"><button data-action="open-answer-history">Past answers</button><button data-action="open-question-packs">Question packs</button></div></article>
+      <article class="card card-pink mascot-home-card">${renderKoiPair(reveal?"Both koi are doing a tiny victory lap — today’s answers unlocked.":mine?`Your koi is waiting for ${partner.displayName}.`:"Your two little koi are waiting for today’s ritual.")}</article>
+      ${lastCheckin?`<article class="card card-lavender"><div class="section-heading" style="margin:0 0 8px"><h2>${escapeHTML(partner.displayName)}’s latest check-in</h2><button data-action="open-checkin">Check in</button></div>${checkinSummary(lastCheckin)}</article>`:""}
+      ${latestLittle?`<article class="card"><div class="section-heading" style="margin:0"><div><p class="eyebrow">LATEST LITTLE THING</p><h3>${escapeHTML(latestLittle.text)}</h3></div><button data-action="open-little-things">See all</button></div></article>`:""}
+      <div class="section-heading"><h2>Quick access</h2><span class="micro muted">your little world</span></div><div class="quick-grid">${quickCard("💗","Little Things",`${state.littleThings.length} noticed`,"open-little-things")}${quickCard("💌","Date Jar",`${state.dateIdeas.filter(item=>!item.completed).length} ideas waiting`,"open-date-jar")}${quickCard("🛋️","Our Room",`Cozy level ${roomLevel()}`,"open-room")}${quickCard("🏛️","Our Museum",`${state.memories.length+state.lore.length+state.littleThings.length} exhibits`,"open-museum")}${quickCard("📖","Our Answers",`${answeredDays().length} days archived`,"open-answer-history")}${quickCard("☺️","Check-in","Mood, energy & what you need","open-checkin")}</div>
+    </section>`;
+  };
+
+  renderExtras = function renderExtrasBuild12() {
+    if(runtime.extrasView==="room")return renderRoom();
+    if(runtime.extrasView==="dateJar")return renderDateJar();
+    if(runtime.extrasView==="checkin")return renderCheckin();
+    if(runtime.extrasView==="canon")return renderCanon();
+    if(runtime.extrasView==="traditions")return renderTraditions();
+    if(runtime.extrasView==="thenNow")return renderThenNow();
+    if(runtime.extrasView==="answers")return renderAnswerHistory();
+    if(runtime.extrasView==="littleThings")return renderLittleThings();
+    if(runtime.extrasView==="blindDate")return renderBlindDate();
+    if(runtime.extrasView==="predictions")return renderPredictions();
+    if(runtime.extrasView==="eras")return renderEras();
+    setFab();
+    mainView.innerHTML=`<section class="page"><div class="page-header"><div><p class="eyebrow">A LITTLE MAGIC</p><h1>Extras ✦</h1><p>The playful, sentimental and slightly weird parts of Koi.</p></div></div><div class="quick-grid">${quickCard("📖","Our Answers",`${answeredDays().length} archived days`,"open-answer-history")}${quickCard("💗","Little Things",`${state.littleThings.length} tiny moments`,"open-little-things")}${quickCard("💌","Date Jar 2.0",`${state.dateIdeas.length} ideas`,"open-date-jar")}${quickCard("🎲","Blind Date Builder","Match private preferences","open-blind-date")}${quickCard("🔮","I Bet You",`${predictionStats().resolved} rounds`,"open-predictions")}${quickCard("🛋️","Our Room",`Level ${roomLevel()}`,"open-room")}${quickCard("☺️","Check-ins",`${state.checkins.length} saved`,"open-checkin")}${quickCard("📖","Our Canon",`${state.canon.length} official things`,"open-canon")}${quickCard("🎀","Traditions",`${state.traditions.length} rituals`,"open-traditions")}${quickCard("📷","Then vs Now","Past you vs current you","open-then-now")}${quickCard("✨","Our Eras",`${state.eras.length} chapters`,"open-eras")}${quickCard("🏛️","Our Museum","Everything becomes an exhibit","open-museum")}</div><article class="card card-duo" style="margin-top:12px"><p class="eyebrow">KOI BUILD 1.2</p><h2>All fourteen feature concepts are now wired locally.</h2><p class="small muted">The next major architecture step is real authentication + two-person cloud sync. Until then, profile switching remains the safe local test mode.</p></article></section>`;
+  };
+
+  // ---------- Event layer for new actions ----------
+
+  document.addEventListener("click", event => {
+    const button=event.target.closest("[data-action]"); if(!button)return; const action=button.dataset.action;
+    const openExtra=view=>{runtime.route="extras";runtime.extrasView=view;location.hash="extras";render();};
+
+    if(action==="open-question-packs")openQuestionPacks();
+    else if(action==="select-question-pack"){state.settings.questionPack=button.dataset.id;delete state.dailyQuestionOverrides[todayKey()];delete state.answers[todayKey()];saveState();closeModal();render();toast(`Question pack: ${currentPack().label}`);}
+    else if(action==="add-custom-question"){closeModal();openAddCustomQuestion();}
+    else if(action==="open-answer-history")openExtra("answers");
+    else if(action==="open-answer-history-detail")openAnswerHistoryDetail(button.dataset.date);
+    else if(action==="open-little-things")openExtra("littleThings");
+    else if(action==="add-little-thing")openAddLittleThing();
+    else if(action==="delete-little-thing"){state.littleThings=state.littleThings.filter(item=>item.id!==button.dataset.id);saveState();render();}
+    else if(action==="surprise-little-thing"){const item=state.littleThings[Math.floor(Math.random()*state.littleThings.length)];if(!item){toast("Save a Little Thing first");return;}openModal({eyebrow:"A LITTLE THING",title:featureDate(item.date),html:`<article class="card card-pink"><h2>${escapeHTML(item.text)}</h2><p class="small muted">${escapeHTML(item.category||"Everyday")}</p></article>`});}
+    else if(action==="date-filter-v2"){runtime.dateFilters[button.dataset.field]=button.dataset.value;render();}
+    else if(action==="complete-date-v2")completeDate(button.dataset.id);
+    else if(action==="rate-date-v2")rateDate(button.dataset.id,button.dataset.value);
+    else if(action==="undo-date-v2"){const item=state.dateIdeas.find(entry=>entry.id===button.dataset.id);if(item){item.completed=false;item.completedAt="";item.rating="";}saveState();render();}
+    else if(action==="open-blind-date")openExtra("blindDate");
+    else if(action==="blind-date-preferences")openBlindPreferences();
+    else if(action==="reset-blind-date"){state.blindDate={preferences:{u1:null,u2:null},match:null,updatedAt:null};saveState();render();}
+    else if(action==="open-predictions")openExtra("predictions");
+    else if(action==="new-prediction")openNewPrediction();
+    else if(action==="prediction-answer"){const round=state.predictions.find(item=>item.id===button.dataset.id);if(round&&round.targetUserId===state.currentUserId){round.actual=button.dataset.value;round.resolvedAt=Date.now();saveState();render();toast(round.actual===round.guess?"Mind reader! ✨":"Not this time 👀");}}
+    else if(action==="lore-filter"){runtime.loreFilter=button.dataset.value;renderMemories();}
+    else if(action==="random-lore"){const item=state.lore[Math.floor(Math.random()*state.lore.length)];if(item)openLore(item.id);else toast("Add some Lore first");}
+    else if(action==="challenge-canon")openCanonChallenge(button.dataset.id);
+    else if(action==="resolve-canon-accept"){const item=state.canon.find(entry=>entry.id===button.dataset.id);if(item?.challenge){item.text=item.challenge.proposed;item.challenge=null;saveState();render();toast("New canon accepted 📖");}}
+    else if(action==="resolve-canon-keep"){const item=state.canon.find(entry=>entry.id===button.dataset.id);if(item){item.challenge=null;saveState();render();toast("Original canon stays");}}
+    else if(action==="adopt-tradition"){const suggestion=traditionSuggestions().find(item=>item.id===button.dataset.id);if(suggestion){state.traditions.unshift({id:uid("t"),title:suggestion.title,cadence:"Whenever",startDate:todayKey(),count:suggestion.count||1,source:"suggested"});state.dismissedTraditionSuggestions.push(suggestion.id);saveState();render();toast("Koi made it official 🎀");}}
+    else if(action==="dismiss-tradition-suggestion"){state.dismissedTraditionSuggestions.push(button.dataset.id);saveState();render();}
+    else if(action==="revisit-then-now"){const item=state.thenNow.find(entry=>entry.id===button.dataset.id);if(item?.newAnswer){item.oldAnswer=item.newAnswer;item.oldDate=item.completedAt||todayKey();item.newAnswer="";item.completedAt="";const d=new Date();d.setMonth(d.getMonth()+6);item.revisitDate=d.toLocaleDateString("en-CA");saveState();render();toast("Saved for another future-you ✦");}}
+    else if(action==="open-eras")openExtra("eras");
+    else if(action==="add-era")openEraForm();
+    else if(action==="edit-era")openEraForm(button.dataset.id);
+    else if(action==="set-active-era"){state.eras.forEach(era=>era.active=era.id===button.dataset.id);state.activeEraId=button.dataset.id;const era=activeEra();if(era)state.pair.currentEra=era.title;saveState();render();toast("Current era updated ✨");}
+    else if(action==="museum-filter"){runtime.museumKindFilter=button.dataset.value;renderMemories();}
+    else if(action==="edit-mascots")openMascotNames();
+  });
+
+  // Refresh once after the feature layer has migrated local state.
+  render();
+})();

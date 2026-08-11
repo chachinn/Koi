@@ -763,3 +763,202 @@ input[type="range"] { accent-color: var(--pink-deep); width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* =========================================================
+   KOI BUILD 1.2 — feature expansion styles
+   ========================================================= */
+
+.interactive-pill { border: 1px solid color-mix(in srgb, var(--pink) 58%, white); cursor: pointer; }
+.inline-actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.inline-actions button,
+.section-heading button {
+  border: 0;
+  background: transparent;
+  color: var(--lavender-deep);
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.choice-grid.compact { gap: 8px; }
+.choice-card {
+  min-height: 104px;
+  padding: 13px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: linear-gradient(145deg, rgba(255,255,255,.92), var(--lavender-soft));
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+.choice-card:nth-child(even) { background: linear-gradient(145deg, rgba(255,255,255,.92), var(--pink-soft)); }
+.choice-card > span { font-size: 25px; }
+.choice-card strong { font-family: Georgia, "Times New Roman", serif; font-size: 15px; }
+.choice-card small { color: var(--ink-muted); line-height: 1.35; }
+.choice-card.is-active { outline: 2px solid color-mix(in srgb, var(--pink-deep) 58%, var(--lavender-deep)); }
+.choice-grid.compact .choice-card { min-height: 72px; justify-content: center; text-align: center; align-items: center; }
+
+.radio-card { position: relative; }
+.radio-card input { position: absolute; opacity: 0; pointer-events: none; }
+.radio-card span {
+  display: grid;
+  place-items: center;
+  min-height: 56px;
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.82);
+  font-weight: 750;
+  cursor: pointer;
+}
+.radio-card input:checked + span { background: linear-gradient(135deg, var(--pink-soft), var(--lavender-soft)); outline: 2px solid var(--pink); }
+
+.filter-scroll {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 2px 1px 10px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.filter-scroll::-webkit-scrollbar { display: none; }
+.filter-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.82);
+  border-radius: 999px;
+  padding: 8px 11px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.filter-chip.is-active { color: var(--pink-deep); background: linear-gradient(135deg, var(--pink-soft), var(--lavender-soft)); border-color: var(--pink); }
+
+.month-block { margin-bottom: 18px; }
+.match-card .tags { margin-top: 10px; }
+
+.challenge-box {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 9px 10px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, var(--pink-soft), var(--lavender-soft));
+  border: 1px dashed var(--lavender);
+}
+.challenge-box small { color: var(--ink-muted); }
+.stack-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; justify-content: center; }
+.tiny-button {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.82);
+  color: var(--lavender-deep);
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.suggestion-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.suggestion-row:last-child { border-bottom: 0; }
+.suggestion-row > div:first-child { display: grid; gap: 3px; }
+.suggestion-row small { color: var(--ink-muted); line-height: 1.35; }
+.suggestion-row > div:last-child { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+
+.era-grid { display: grid; gap: 10px; }
+.era-card {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.82);
+  box-shadow: var(--shadow-soft);
+}
+.era-card.is-active { background: linear-gradient(135deg, var(--pink-soft), var(--lavender-soft)); border-color: color-mix(in srgb, var(--pink) 50%, var(--lavender)); }
+.era-emoji { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; font-size: 25px; background: rgba(255,255,255,.78); }
+.era-card h3 { margin: 0 0 3px; font-family: Georgia, "Times New Roman", serif; }
+.era-card p, .era-card small { margin: 0; color: var(--ink-muted); font-size: 11px; }
+
+.museum-section { margin: 18px 0 22px; }
+.museum-section-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin: 0 2px 10px; }
+.museum-section-title h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 20px; }
+
+/* Pink + lavender koi mascot system */
+.koi-pond-mini {
+  min-height: 118px;
+  display: grid;
+  grid-template-columns: 72px 34px 72px;
+  grid-template-rows: 74px auto;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  position: relative;
+  padding: 8px 6px 2px;
+}
+.koi-pond-mini p { grid-column: 1 / -1; margin: 5px 0 0; text-align: center; color: var(--ink-muted); font-size: 11px; line-height: 1.4; }
+.koi-heart { text-align: center; font-size: 20px; animation: koiPulse 2.2s ease-in-out infinite; }
+@keyframes koiPulse { 0%,100% { transform: scale(.9); opacity: .78; } 50% { transform: scale(1.08); opacity: 1; } }
+.koi-fish {
+  width: 60px;
+  height: 31px;
+  border-radius: 55% 48% 48% 55%;
+  position: relative;
+  box-shadow: 0 7px 16px rgba(107,74,106,.10);
+}
+.koi-pink { background: linear-gradient(135deg, #fff 4%, var(--pink) 48%, var(--pink-deep)); transform: rotate(12deg); }
+.koi-lavender { background: linear-gradient(135deg, #fff 4%, var(--lavender) 48%, var(--lavender-deep)); transform: rotate(168deg); }
+.koi-tail {
+  position: absolute;
+  right: -14px;
+  top: 3px;
+  width: 0;
+  height: 0;
+  border-top: 13px solid transparent;
+  border-bottom: 13px solid transparent;
+  border-left: 19px solid color-mix(in srgb, var(--pink) 76%, white);
+  filter: drop-shadow(0 3px 3px rgba(107,74,106,.06));
+}
+.koi-lavender .koi-tail { border-left-color: color-mix(in srgb, var(--lavender) 76%, white); }
+.koi-eye { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--ink); left: 8px; top: 9px; box-shadow: 0 0 0 2px rgba(255,255,255,.65); }
+.koi-lavender .koi-eye { left: 47px; top: 17px; }
+.mascot-home-card { padding-top: 8px; padding-bottom: 8px; }
+
+.room-scene-v2 { min-height: 330px; }
+.room-pond {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  width: min(82%, 340px);
+  padding: 5px 8px 2px;
+  border-radius: 50% 50% 44% 44%;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--pink-soft) 50%, white), color-mix(in srgb, var(--lavender-soft) 75%, white));
+  border: 1px solid color-mix(in srgb, var(--lavender) 45%, white);
+  box-shadow: inset 0 8px 18px rgba(255,255,255,.65), 0 7px 18px rgba(107,74,106,.08);
+}
+.room-pond .koi-pond-mini { min-height: 94px; grid-template-rows: 68px 0; overflow: hidden; }
+.room-pond .koi-pond-mini p { display: none; }
+.room-mascot-floating { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%) scale(.82); transform-origin: bottom center; }
+.moon-lamp { position: absolute; right: 18px; top: 74px; font-size: 34px; filter: drop-shadow(0 0 13px rgba(215,196,242,.72)); }
+
+@media (max-width: 430px) {
+  .choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .era-card { grid-template-columns: 44px 1fr; }
+  .era-card .stack-actions { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; }
+  .suggestion-row { grid-template-columns: 1fr; }
+  .suggestion-row > div:last-child { justify-content: flex-start; }
+}
