@@ -5,6 +5,7 @@
   if (!cloud) return;
 
   const BUCKET = "koi-media";
+  const signedUrlCache = new Map();
 
   function requirePair(pairId) {
     if (!pairId) throw new Error("No Koi pair is connected.");
@@ -20,6 +21,9 @@
   }
 
   async function compressToBlob(file) {
+    if (typeof window.compressImageToBlob === "function") {
+      return window.compressImageToBlob(file, 1600, 0.82);
+    }
     if (typeof window.compressImage === "function") {
       const dataUrl = await window.compressImage(file, 1600, 0.82);
       return fetch(dataUrl).then(response => response.blob());
@@ -76,19 +80,34 @@
   }
 
   async function signedUrlsFor(mediaRows) {
-    const paths = (mediaRows || []).map(row => row.storage_path).filter(Boolean);
+    const paths = [...new Set((mediaRows || []).map(row => row.storage_path).filter(Boolean))];
     if (!paths.length) return new Map();
 
-    const { data, error } = await cloud.client.storage
-      .from(BUCKET)
-      .createSignedUrls(paths, 60 * 60 * 24);
-    if (error) throw error;
-
+    const now = Date.now();
     const map = new Map();
-    (data || []).forEach((entry, index) => {
-      const path = entry.path || paths[index];
-      if (path && entry.signedUrl) map.set(path, entry.signedUrl);
-    });
+    const missing = [];
+
+    for (const path of paths) {
+      const cached = signedUrlCache.get(path);
+      if (cached && cached.expiresAt > now + 5 * 60 * 1000) map.set(path, cached.url);
+      else missing.push(path);
+    }
+
+    if (missing.length) {
+      const { data, error } = await cloud.client.storage
+        .from(BUCKET)
+        .createSignedUrls(missing, 60 * 60 * 24);
+      if (error) throw error;
+
+      (data || []).forEach((entry, index) => {
+        const path = entry.path || missing[index];
+        if (!path || !entry.signedUrl) return;
+        const record = { url: entry.signedUrl, expiresAt: now + 23 * 60 * 60 * 1000 };
+        signedUrlCache.set(path, record);
+        map.set(path, record.url);
+      });
+    }
+
     return map;
   }
 

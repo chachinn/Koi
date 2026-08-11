@@ -1,4 +1,4 @@
-const CACHE_VERSION = "koi-foundation-2-v9-memory-form-cleanup";
+const CACHE_VERSION = "koi-stability-v10-live-sync";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -14,6 +14,7 @@ const APP_SHELL = [
   "./services/shared-state.js",
   "./services/world.js",
   "./features/koi-world.js",
+  "./services/live-sync.js",
   "./services/sync.js",
   "./services/cloud-bootstrap.js",
   "./manifest.json",

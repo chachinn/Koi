@@ -7,6 +7,67 @@
   let activePairPayload = null;
   let currentSession = null;
   let booting = false;
+  let renderFrame = 0;
+  let fullRefreshPromise = null;
+  let lastFullRefreshAt = 0;
+  let resumeRefreshTimer = null;
+  const refreshSlots = new Map();
+
+  function userIsEditing() {
+    const active = document.activeElement;
+    if (!active) return false;
+    if (!["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return false;
+    return !active.disabled && !active.readOnly;
+  }
+
+  function renderSoon() {
+    if (renderFrame || userIsEditing()) {
+      if (userIsEditing()) cloud.runtime.renderDeferred = true;
+      return;
+    }
+    renderFrame = requestAnimationFrame(() => {
+      renderFrame = 0;
+      cloud.runtime.renderDeferred = false;
+      render();
+    });
+  }
+
+  document.addEventListener("focusout", () => {
+    if (!cloud.runtime.renderDeferred) return;
+    setTimeout(renderSoon, 0);
+  });
+
+  cloud.requestRender = renderSoon;
+
+  function persistRemoteSoon() {
+    if (window.KoiLocalState?.persistRemote) window.KoiLocalState.persistRemote();
+    else {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+    }
+  }
+
+  function runCoalesced(key, worker) {
+    let slot = refreshSlots.get(key);
+    if (!slot) {
+      slot = { running: false, again: false, promise: null };
+      refreshSlots.set(key, slot);
+    }
+    if (slot.running) {
+      slot.again = true;
+      return slot.promise || Promise.resolve();
+    }
+    slot.running = true;
+    slot.promise = (async () => {
+      do {
+        slot.again = false;
+        await worker();
+      } while (slot.again);
+    })().finally(() => {
+      slot.running = false;
+      slot.promise = null;
+    });
+    return slot.promise;
+  }
 
   const localOpenAddLittleThing = typeof openAddLittleThing === "function" ? openAddLittleThing : null;
   const localOpenTwoSides = typeof openTwoSides === "function" ? openTwoSides : null;
@@ -224,7 +285,7 @@
     state.pair.inviteCode = payload.invite?.code || "";
     state.onboardingComplete = true;
 
-    saveState();
+    persistRemoteSoon();
   }
 
   function cloudToLocalLittleThing(row) {
@@ -245,15 +306,17 @@
 
   async function refreshLittleThings({ quiet = false } = {}) {
     if (!cloud.runtime.ready || !activePairPayload?.pair?.id) return;
-    try {
-      const rows = await cloud.littleThings.list(activePairPayload.pair.id);
-      state.littleThings = rows.map(cloudToLocalLittleThing);
-      saveState();
-      render();
-    } catch (error) {
-      console.error("Koi cloud refresh failed", error);
-      if (!quiet) toast(`Sync paused: ${error.message || "network error"}`);
-    }
+    return runCoalesced("littleThings", async () => {
+      try {
+        const rows = await cloud.littleThings.list(activePairPayload.pair.id);
+        state.littleThings = rows.map(cloudToLocalLittleThing);
+        persistRemoteSoon();
+        renderSoon();
+      } catch (error) {
+        console.error("Koi cloud refresh failed", error);
+        if (!quiet) toast(`Sync paused: ${error.message || "network error"}`);
+      }
+    });
   }
 
   function cloudMemoryToLocal(row) {
@@ -293,59 +356,65 @@
 
   async function refreshMemories({ quiet = false } = {}) {
     if (!cloud.runtime.ready || !activePairPayload?.pair?.id || !cloud.memories) return;
-    try {
-      const rows = await cloud.memories.list(activePairPayload.pair.id);
-      state.memories = rows.map(cloudMemoryToLocal);
-      saveState();
-      render();
-    } catch (error) {
-      console.error("Koi memory sync failed", error);
-      if (!quiet) toast(`Memory sync paused: ${error.message || "network error"}`);
-    }
+    return runCoalesced("memories", async () => {
+      try {
+        const rows = await cloud.memories.list(activePairPayload.pair.id);
+        state.memories = rows.map(cloudMemoryToLocal);
+        persistRemoteSoon();
+        renderSoon();
+      } catch (error) {
+        console.error("Koi memory sync failed", error);
+        if (!quiet) toast(`Memory sync paused: ${error.message || "network error"}`);
+      }
+    });
   }
 
   cloud.refreshMemories = refreshMemories;
 
   async function refreshPair({ quiet = true } = {}) {
     if (!currentSession) return;
-    try {
-      const fresh = await cloud.pairs.getMine();
-      if (!fresh?.pair) return;
-      await mapCloudPairToLocal(fresh);
-      render();
-    } catch (error) {
-      console.error("Koi pair refresh failed", error);
-      if (!quiet) toast(error.message || "Could not refresh your pair");
-    }
+    return runCoalesced("pair", async () => {
+      try {
+        const fresh = await cloud.pairs.getMine();
+        if (!fresh?.pair) return;
+        await mapCloudPairToLocal(fresh);
+        renderSoon();
+      } catch (error) {
+        console.error("Koi pair refresh failed", error);
+        if (!quiet) toast(error.message || "Could not refresh your pair");
+      }
+    });
   }
 
   cloud.refreshPair = refreshPair;
 
   async function refreshWorld({ quiet = false, notify = false } = {}) {
     if (!cloud.runtime.ready || !cloud.world) return;
-    try {
-      const previous = Array.isArray(state.worldItems) ? state.worldItems : [];
-      const rows = await cloud.world.list();
-      state.worldItems = rows;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return runCoalesced("world", async () => {
+      try {
+        const previous = Array.isArray(state.worldItems) ? state.worldItems : [];
+        const rows = await cloud.world.list();
+        state.worldItems = rows;
+        persistRemoteSoon();
 
-      const meId = currentSession?.user?.id;
-      const newestPartnerPing = rows
-        .filter(row => row.feature_key === "thinking" && row.owner_id !== meId)
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-      const hadPing = previous.some(row => row.id === newestPartnerPing?.id);
+        const meId = currentSession?.user?.id;
+        const newestPartnerPing = rows
+          .filter(row => row.feature_key === "thinking" && row.owner_id !== meId)
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+        const hadPing = previous.some(row => row.id === newestPartnerPing?.id);
 
-      render();
-      if (notify && newestPartnerPing && !hadPing) {
-        toast("Your person is thinking of you 💗");
-        if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
-          try { new Notification("Koi 💗", { body: "Your person is thinking of you.", icon: "icon/icon-192.png" }); } catch {}
+        renderSoon();
+        if (notify && newestPartnerPing && !hadPing) {
+          toast("Your person is thinking of you 💗");
+          if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
+            try { new Notification("Koi 💗", { body: "Your person is thinking of you.", icon: "icon/icon-192.png" }); } catch {}
+          }
         }
+      } catch (error) {
+        console.error("Koi World sync failed", error);
+        if (!quiet) toast(error.message || "Koi World sync paused");
       }
-    } catch (error) {
-      console.error("Koi World sync failed", error);
-      if (!quiet) toast(error.message || "Koi World sync paused");
-    }
+    });
   }
 
   cloud.refreshWorld = refreshWorld;
@@ -358,7 +427,7 @@
 
     if (cloud.sharedState) {
       try {
-        await cloud.sharedState.start(payload.pair.id, { initializeIfMissing: true });
+        await cloud.sharedState.start(payload.pair.id, { initializeIfMissing: true, subscribe: false });
       } catch (error) {
         console.error("Koi shared-state startup failed", error);
         toast("Some shared edits are waiting to sync");
@@ -366,36 +435,39 @@
     }
 
     await cloud.sync.flush();
-    await Promise.all([
+    await Promise.allSettled([
       refreshLittleThings({ quiet: true }),
       refreshMemories({ quiet: true }),
       refreshWorld({ quiet: true })
     ]);
 
-    await cloud.littleThings.subscribe(payload.pair.id, async () => {
-      await refreshLittleThings({ quiet: true });
-      toast("Koi updated from your partner 💗");
-    });
-
-    if (cloud.memories) {
-      await cloud.memories.subscribe(payload.pair.id, async () => {
-        await refreshMemories({ quiet: true });
+    // Step 27: one pair-wide private Realtime channel replaces the previous
+    // collection of per-feature channels. Bursts are coalesced by domain so a
+    // photo upload or rapid edits cause one refresh/render rather than many.
+    if (cloud.liveSync) {
+      await cloud.liveSync.connect(payload.pair.id, {
+        littleThings: () => refreshLittleThings({ quiet: true }),
+        memories: () => refreshMemories({ quiet: true }),
+        world: () => refreshWorld({ quiet: true, notify: true }),
+        sharedState: async () => {
+          // Preserve a local edit that is still inside the short debounce window
+          // before applying the partner's newest shared document.
+          await cloud.sharedState?.flushLocal?.();
+          await cloud.sharedState?.refresh?.();
+        },
+        pair: () => refreshPair({ quiet: true }),
+        all: () => refreshAllCloudData({ force: true })
       });
+    } else {
+      // Backward-compatible fallback if the new live-sync file failed to load.
+      await cloud.littleThings.subscribe(payload.pair.id, () => refreshLittleThings({ quiet: true }));
+      if (cloud.memories) await cloud.memories.subscribe(payload.pair.id, () => refreshMemories({ quiet: true }));
+      if (cloud.world) await cloud.world.subscribe(payload.pair.id, () => refreshWorld({ quiet: true, notify: true }));
+      if (cloud.pairs?.subscribe) await cloud.pairs.subscribe(payload.pair.id, () => refreshPair({ quiet: true }));
+      if (cloud.sharedState) await cloud.sharedState.subscribe(payload.pair.id);
     }
 
-    if (cloud.world) {
-      await cloud.world.subscribe(payload.pair.id, async () => {
-        await refreshWorld({ quiet: true, notify: true });
-      });
-    }
-
-    if (cloud.pairs?.subscribe) {
-      await cloud.pairs.subscribe(payload.pair.id, async () => {
-        await refreshPair({ quiet: true });
-      });
-    }
-
-    render();
+    renderSoon();
   }
 
   async function loadAccountAndPair() {
@@ -784,34 +856,65 @@
     }
   });
 
-  async function refreshAllCloudData({ showToast = false } = {}) {
+  async function refreshAllCloudData({ showToast = false, force = false } = {}) {
     if (!cloud.runtime.ready) return;
-    await cloud.sync.flush();
-    await Promise.all([
-      refreshLittleThings({ quiet: true }),
-      refreshMemories({ quiet: true }),
-      refreshWorld({ quiet: true }),
-      cloud.sharedState?.refresh?.(),
-      refreshPair({ quiet: true })
-    ]);
-    await cloud.sharedState?.flushLocal?.();
-    if (showToast) toast("Koi is back online");
+    const now = Date.now();
+    if (!force && now - lastFullRefreshAt < 900) return fullRefreshPromise;
+    if (fullRefreshPromise) return fullRefreshPromise;
+
+    fullRefreshPromise = (async () => {
+      await cloud.sync.flush();
+      // Push any local shared edit first so a resume refresh cannot overwrite an
+      // edit that was made just before iOS suspended the app.
+      await cloud.sharedState?.flushLocal?.();
+      const results = await Promise.allSettled([
+        refreshLittleThings({ quiet: true }),
+        refreshMemories({ quiet: true }),
+        refreshWorld({ quiet: true }),
+        cloud.sharedState?.refresh?.(),
+        refreshPair({ quiet: true })
+      ]);
+      await cloud.liveSync?.ensure?.();
+      lastFullRefreshAt = Date.now();
+      if (results.some(result => result.status === "rejected")) {
+        console.warn("Koi resumed with one or more sync domains still retrying.", results);
+      }
+      if (showToast) toast("Koi is back online");
+    })().finally(() => {
+      fullRefreshPromise = null;
+    });
+
+    return fullRefreshPromise;
   }
 
-  window.addEventListener("online", () => refreshAllCloudData({ showToast: true }));
+  cloud.refreshAll = refreshAllCloudData;
 
-  // iOS suspends background PWAs. Refresh immediately whenever Koi becomes visible
-  // again so a partner's edits are never dependent on a still-open WebSocket.
+  function scheduleResumeRefresh({ showToast = false } = {}) {
+    clearTimeout(resumeRefreshTimer);
+    resumeRefreshTimer = setTimeout(() => {
+      refreshAllCloudData({ showToast }).catch(error => console.warn("Koi resume refresh", error));
+    }, 140);
+  }
+
+  window.addEventListener("online", () => scheduleResumeRefresh({ showToast: true }));
+
+  // iOS can suspend a Home Screen PWA and its WebSocket. Refresh once when the
+  // app becomes active; the short debounce prevents pageshow + visibilitychange
+  // from starting duplicate network work.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") refreshAllCloudData();
+    if (document.visibilityState === "visible") scheduleResumeRefresh();
   });
-  window.addEventListener("pageshow", () => refreshAllCloudData());
+  window.addEventListener("pageshow", () => scheduleResumeRefresh());
+
 
   cloud.auth.onChange(async (event, session) => {
     currentSession = session;
     if (event === "SIGNED_OUT") {
-      await Promise.all([
+      await Promise.allSettled([
+        cloud.liveSync?.unsubscribe?.(),
+        cloud.littleThings?.unsubscribe?.(),
         cloud.memories?.unsubscribe?.(),
+        cloud.world?.unsubscribe?.(),
         cloud.sharedState?.unsubscribe?.(),
         cloud.pairs?.unsubscribe?.()
       ]);

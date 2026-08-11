@@ -52,22 +52,27 @@
 
     async subscribe(pairId, onChange) {
       requirePair(pairId);
-
-      if (cloud.runtime.channel) {
-        await cloud.client.removeChannel(cloud.runtime.channel);
-        cloud.runtime.channel = null;
-      }
-
+      await cloud.littleThings.unsubscribe();
       await cloud.client.realtime.setAuth();
 
       const topic = `pair:${pairId}:little_things`;
       const channel = cloud.client
         .channel(topic, { config: { private: true } })
         .on("broadcast", { event: "*" }, payload => onChange?.(payload))
-        .subscribe();
+        .subscribe((status, error) => {
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.warn("Koi Little Things realtime channel", status, error || "");
+          }
+        });
 
       cloud.runtime.channel = channel;
       return channel;
+    },
+
+    async unsubscribe() {
+      if (!cloud.runtime.channel) return;
+      await cloud.client.removeChannel(cloud.runtime.channel).catch(() => {});
+      cloud.runtime.channel = null;
     }
   };
 })();

@@ -10,9 +10,11 @@
   let syncTimer = null;
   let lastSnapshot = null;
   let wallpaperPath = "";
+  let wallpaperSignedCache = { path: "", url: "", expiresAt: 0 };
   let applyingRemote = false;
   let syncInFlight = false;
   let syncAgain = false;
+  let refreshPromise = null;
 
   function api() {
     return window.KoiLocalState || null;
@@ -95,11 +97,17 @@
 
   async function signedWallpaperUrl(path) {
     if (!path) return "";
+    const now = Date.now();
+    if (wallpaperSignedCache.path === path && wallpaperSignedCache.url && wallpaperSignedCache.expiresAt > now + 10 * 60 * 1000) {
+      return wallpaperSignedCache.url;
+    }
     const { data, error } = await cloud.client.storage
       .from(BUCKET)
       .createSignedUrl(path, 60 * 60 * 24 * 7);
     if (error) throw error;
-    return data?.signedUrl || "";
+    const url = data?.signedUrl || "";
+    wallpaperSignedCache = { path, url, expiresAt: now + 6.5 * 24 * 60 * 60 * 1000 };
+    return url;
   }
 
   async function applyRemote(data = {}, { persist = true } = {}) {
@@ -175,7 +183,8 @@
 
       lastSnapshot = snapshotFromLocal();
       if (persist) api()?.persistRemote?.();
-      api()?.render?.();
+      if (typeof cloud.requestRender === "function") cloud.requestRender();
+      else api()?.render?.();
     } finally {
       applyingRemote = false;
       cloud.runtime.applyingRemote = false;
@@ -235,7 +244,7 @@
   function scheduleFromLocal() {
     if (!cloud.runtime.ready || !activePairId || applyingRemote || cloud.runtime.applyingRemote) return;
     clearTimeout(syncTimer);
-    syncTimer = setTimeout(flushLocal, 260);
+    syncTimer = setTimeout(flushLocal, 140);
   }
 
   async function load(pairId, { initializeIfMissing = true } = {}) {
@@ -257,8 +266,14 @@
 
   async function refresh() {
     if (!activePairId) return;
-    const row = await readRow(activePairId);
-    if (row?.data) await applyRemote(row.data);
+    if (refreshPromise) return refreshPromise;
+    refreshPromise = (async () => {
+      const row = await readRow(activePairId);
+      if (row?.data) await applyRemote(row.data);
+    })().finally(() => {
+      refreshPromise = null;
+    });
+    return refreshPromise;
   }
 
   async function subscribe(pairId, onChange) {
@@ -278,7 +293,9 @@
 
   async function start(pairId, options = {}) {
     await load(pairId, options);
-    await subscribe(pairId);
+    // Stability mode uses one pair-wide Realtime channel in live-sync.js.
+    // Keep the legacy per-domain subscription available for older deployments.
+    if (options.subscribe !== false) await subscribe(pairId);
   }
 
   async function unsubscribe() {
@@ -296,7 +313,9 @@
     if (!file || !String(file.type || "").startsWith("image/")) throw new Error("Choose an image file.");
 
     let blob = file;
-    if (typeof window.compressImage === "function") {
+    if (typeof window.compressImageToBlob === "function") {
+      blob = await window.compressImageToBlob(file, 1600, 0.78);
+    } else if (typeof window.compressImage === "function") {
       const dataUrl = await window.compressImage(file, 1600, 0.78);
       blob = await fetch(dataUrl).then(response => response.blob());
     }
@@ -336,6 +355,7 @@
     if (!activePairId) return;
     const oldPath = wallpaperPath;
     wallpaperPath = "";
+    wallpaperSignedCache = { path: "", url: "", expiresAt: 0 };
     const state = getState();
     if (state) {
       state.settings.customWallpaperPhoto = "";

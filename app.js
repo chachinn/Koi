@@ -386,21 +386,72 @@ const modalEyebrow = document.getElementById("modalEyebrow");
 const toastEl = document.getElementById("toast");
 const appShell = document.getElementById("app");
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+let localPersistTimer = null;
+let lastThemeFingerprint = "";
+
+function themeFingerprint() {
+  const settings = state.settings || {};
+  const photo = String(settings.customWallpaperPhoto || "");
+  // Avoid repeatedly hashing a potentially large data URL. Length + edges are
+  // enough to detect practical wallpaper changes without blocking the main thread.
+  const photoMark = photo ? `${photo.length}:${photo.slice(0, 28)}:${photo.slice(-28)}` : "";
+  return [
+    settings.themePair,
+    settings.customColorOne,
+    settings.customColorTwo,
+    settings.wallpaper,
+    settings.customWallpaperEnabled,
+    settings.customWallpaperOverlay,
+    settings.customWallpaperPosition,
+    photoMark
+  ].join("|");
+}
+
+function applyThemeIfChanged(force = false) {
+  const next = themeFingerprint();
+  if (!force && next === lastThemeFingerprint) return;
+  lastThemeFingerprint = next;
   applyTheme();
+}
+
+function persistStateNow() {
+  clearTimeout(localPersistTimer);
+  localPersistTimer = null;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.warn("Could not save Koi locally.", error);
+  }
+}
+
+function scheduleStatePersist(delay = 90) {
+  clearTimeout(localPersistTimer);
+  localPersistTimer = setTimeout(persistStateNow, delay);
+}
+
+function saveState() {
+  // localStorage writes are synchronous. Batching rapid UI edits keeps taps,
+  // typing and scrolling smooth while the in-memory state still updates instantly.
+  scheduleStatePersist();
+  applyThemeIfChanged();
   window.KoiCloud?.sharedState?.scheduleFromLocal?.();
 }
 
 window.KoiLocalState = {
   get: () => state,
   persistRemote: () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    applyTheme();
+    scheduleStatePersist(60);
+    applyThemeIfChanged();
   },
+  flushPersist: () => persistStateNow(),
   render: () => render(),
-  applyTheme: () => applyTheme()
+  applyTheme: () => applyThemeIfChanged(true)
 };
+
+window.addEventListener("pagehide", persistStateNow);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") persistStateNow();
+});
 
 function applyTheme() {
   const theme = state.settings.themePair === "custom"
@@ -1306,16 +1357,64 @@ function openEditProfile() {
   document.getElementById("profileForm").addEventListener("submit", event => { event.preventDefault(); const form = new FormData(event.currentTarget); me.displayName = String(form.get("myName") || "You").trim(); me.avatar = String(form.get("myAvatar") || "🌷").trim(); partner.displayName = String(form.get("partnerName") || "Love").trim(); partner.avatar = String(form.get("partnerAvatar") || "☁️").trim(); saveState(); closeModal(); render(); toast("Profiles updated"); });
 }
 
-async function compressImage(file, maxDimension = 1200, quality = 0.76) {
-  const bitmap = await createImageBitmap(file);
-  let { width, height } = bitmap;
-  const scale = Math.min(1, maxDimension / Math.max(width, height));
-  width = Math.round(width * scale); height = Math.round(height * scale);
-  const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
-  const context = canvas.getContext("2d"); context.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close?.();
-  return canvas.toDataURL("image/jpeg", quality);
+async function decodeImageForCompression(file) {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(file);
+      return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close?.() };
+    } catch (error) {
+      console.warn("Koi image bitmap fallback", error);
+    }
+  }
+
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("Could not decode this photo."));
+      element.src = url;
+    });
+    return { source: image, width: image.naturalWidth, height: image.naturalHeight, close: () => {} };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
+
+async function compressImageToBlob(file, maxDimension = 1200, quality = 0.76) {
+  const decoded = await decodeImageForCompression(file);
+  let { width, height } = decoded;
+  const scale = Math.min(1, maxDimension / Math.max(width, height));
+  width = Math.max(1, Math.round(width * scale));
+  height = Math.max(1, Math.round(height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("Photo processing is not available on this device.");
+  context.drawImage(decoded.source, 0, 0, width, height);
+  decoded.close();
+
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(result => result ? resolve(result) : reject(new Error("Could not compress this photo.")), "image/jpeg", quality);
+  });
+  canvas.width = 1;
+  canvas.height = 1;
+  return blob;
+}
+
+async function compressImage(file, maxDimension = 1200, quality = 0.76) {
+  const blob = await compressImageToBlob(file, maxDimension, quality);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Could not prepare this photo."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+window.compressImageToBlob = compressImageToBlob;
 
 function exportData() {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
