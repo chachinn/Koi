@@ -1632,3 +1632,110 @@ input[type="range"] { accent-color: var(--pink-deep); width: 100%; }
   .world-category-tile { min-height:136px; padding:13px; border-radius:21px; }
   .world-category-tile-copy strong { font-size:16px; }
 }
+
+/* =========================================================
+   KOI STEP 26 — MEMORY FORM MOBILE UI CLEANUP
+   Keeps the memory editor roomy and readable on phones.
+   ========================================================= */
+#memoryForm {
+  gap: 14px;
+}
+
+#memoryForm .field {
+  min-width: 0;
+}
+
+#memoryForm .field label {
+  margin: 0 0 6px 3px;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+#memoryForm .field input,
+#memoryForm .field select,
+#memoryForm .field textarea {
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 14px;
+  border-radius: 17px;
+}
+
+#memoryForm .field textarea {
+  min-height: 88px;
+  line-height: 1.45;
+}
+
+#memoryForm input[type="date"] {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  text-align: left;
+  padding-inline: 14px;
+}
+
+#memoryForm input[type="file"] {
+  min-height: 54px;
+  padding: 8px;
+  background: rgba(255,255,255,.94);
+}
+
+#memoryForm input[type="file"]::file-selector-button {
+  min-height: 36px;
+  margin-right: 10px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(145deg, var(--pink-soft), var(--lavender-soft));
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+}
+
+#memoryForm .field small {
+  display: block;
+  margin: 7px 3px 0;
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+#memoryForm > .button[type="submit"] {
+  min-height: 52px;
+  margin-top: 2px;
+  border-radius: 18px;
+}
+
+/* The two-column metadata rows look good on tablets/desktop,
+   but are too cramped on phone widths. */
+@media (max-width: 640px) {
+  #memoryForm .two-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .modal-sheet:has(#memoryForm) {
+    max-height: 92dvh;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .modal-sheet:has(#memoryForm) .modal-header {
+    margin-bottom: 12px;
+  }
+
+  .modal-sheet:has(#memoryForm) .modal-header h2 {
+    font-size: 22px;
+    line-height: 1.08;
+  }
+}
+
+@media (max-width: 380px) {
+  .modal-sheet:has(#memoryForm) {
+    padding-left: 13px;
+    padding-right: 13px;
+  }
+
+  #memoryForm {
+    gap: 12px;
+  }
+}
