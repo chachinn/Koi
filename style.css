@@ -1044,3 +1044,43 @@ input[type="range"] { accent-color: var(--pink-deep); width: 100%; }
 
 /* Hide the same-device test account switcher when real Koi Cloud accounts are active. */
 .koi-cloud-ready .profile-switch { display: none !important; }
+
+/* =========================================================
+   KOI CLOUD — compact anniversary picker
+   ========================================================= */
+.cloud-create-pair-card {
+  gap: 8px;
+  padding: 14px;
+}
+.cloud-create-pair-card h2,
+.cloud-create-pair-card p {
+  margin-top: 0;
+  margin-bottom: 2px;
+}
+.cloud-anniversary-field {
+  margin-top: 2px;
+}
+.cloud-anniversary-picker {
+  display: grid;
+  grid-template-columns: 1.25fr .72fr .95fr;
+  gap: 6px;
+}
+.cloud-anniversary-picker select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 7px;
+  border-radius: 12px;
+  font-size: 14px;
+  background: rgba(255,255,255,.94);
+}
+@media (max-width: 370px) {
+  .cloud-anniversary-picker {
+    grid-template-columns: 1.15fr .68fr .9fr;
+    gap: 5px;
+  }
+  .cloud-anniversary-picker select {
+    padding-inline: 5px;
+    font-size: 13px;
+  }
+}

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "koi-foundation-2-v1";
+const CACHE_VERSION = "koi-foundation-2-v2-pair-fix";
 const APP_SHELL = [
   "./",
   "./index.html",

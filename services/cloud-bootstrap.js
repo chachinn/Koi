@@ -79,17 +79,78 @@
     `);
   }
 
-  function renderPairGate(message = "") {
+  function anniversaryOptions(selected = "") {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const [selectedYear = "", selectedMonth = "", selectedDay = ""] = String(selected || "").split("-");
+    const months = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    const monthOptions = months.map((label, index) => {
+      const value = String(index + 1).padStart(2, "0");
+      return `<option value="${value}" ${value === selectedMonth ? "selected" : ""}>${label.slice(0, 3)}</option>`;
+    }).join("");
+
+    const dayOptions = Array.from({ length: 31 }, (_, index) => {
+      const value = String(index + 1).padStart(2, "0");
+      return `<option value="${value}" ${value === selectedDay ? "selected" : ""}>${index + 1}</option>`;
+    }).join("");
+
+    const yearOptions = Array.from({ length: 101 }, (_, index) => currentYear - index).map(year =>
+      `<option value="${year}" ${String(year) === selectedYear ? "selected" : ""}>${year}</option>`
+    ).join("");
+
+    return { monthOptions, dayOptions, yearOptions };
+  }
+
+  function readAnniversary(form) {
+    const month = String(form.get("anniversaryMonth") || "");
+    const day = String(form.get("anniversaryDay") || "");
+    const year = String(form.get("anniversaryYear") || "");
+
+    if (!month && !day && !year) return null;
+    if (!month || !day || !year) throw new Error("Choose the month, day, and year for your anniversary.");
+
+    const iso = `${year}-${month}-${day}`;
+    const candidate = new Date(`${iso}T12:00:00`);
+    if (Number.isNaN(candidate.getTime()) ||
+        candidate.getFullYear() !== Number(year) ||
+        candidate.getMonth() + 1 !== Number(month) ||
+        candidate.getDate() !== Number(day)) {
+      throw new Error("That anniversary date is not valid.");
+    }
+
+    if (candidate > new Date()) throw new Error("Your anniversary can't be in the future.");
+    return iso;
+  }
+
+  function renderPairGate(message = "", anniversary = "") {
+    const { monthOptions, dayOptions, yearOptions } = anniversaryOptions(anniversary);
     showGate(`
       <div class="cloud-gate-brand">Koi <span>💗</span></div>
       <p class="eyebrow">CONNECT YOUR TWO PHONES</p>
       <h1>Create your Koi, or join your partner.</h1>
       ${message ? `<div class="cloud-message">${html(message)}</div>` : ""}
       <div class="cloud-pair-grid">
-        <form id="createPairForm" class="card card-pink form-grid">
+        <form id="createPairForm" class="card card-pink form-grid cloud-create-pair-card">
           <h2>Create our Koi</h2>
           <p class="small muted">You'll get a one-time invite code for your partner.</p>
-          <div class="field"><label>Anniversary</label><input name="anniversary" type="date"></div>
+          <div class="field cloud-anniversary-field">
+            <label>Anniversary</label>
+            <div class="cloud-anniversary-picker" role="group" aria-label="Anniversary date">
+              <select name="anniversaryMonth" aria-label="Anniversary month">
+                <option value="">Month</option>${monthOptions}
+              </select>
+              <select name="anniversaryDay" aria-label="Anniversary day">
+                <option value="">Day</option>${dayOptions}
+              </select>
+              <select name="anniversaryYear" aria-label="Anniversary year">
+                <option value="">Year</option>${yearOptions}
+              </select>
+            </div>
+          </div>
           <button class="button button-primary" type="submit">Create pair</button>
         </form>
         <form id="joinPairForm" class="card card-lavender form-grid">
@@ -480,14 +541,14 @@
     if (event.target?.id === "createPairForm") {
       event.preventDefault();
       const form = new FormData(event.target);
+      let anniversary = null;
       try {
-        const payload = await cloud.pairs.create({
-          anniversary: String(form.get("anniversary") || "") || null
-        });
+        anniversary = readAnniversary(form);
+        const payload = await cloud.pairs.create({ anniversary });
         activePairPayload = payload;
         renderInviteReady(payload);
       } catch (error) {
-        renderPairGate(error.message || "Could not create pair.");
+        renderPairGate(error.message || "Could not create pair.", anniversary || "");
       }
       return;
     }
