@@ -447,6 +447,11 @@
       catch (error) { console.warn("Koi chat startup failed", error); }
     }
 
+    if (cloud.push) {
+      cloud.push.prefetchConfig?.().catch(() => {});
+      cloud.push.syncCurrent?.(payload.pair.id).catch(() => {});
+    }
+
     // Step 27: one pair-wide private Realtime channel replaces the previous
     // collection of per-feature channels. Bursts are coalesced by domain so a
     // photo upload or rapid edits cause one refresh/render rather than many.
@@ -649,6 +654,9 @@
 
   async function signOutAndReset() {
     try {
+      // Remove this account's device endpoint before the auth token disappears.
+      // This prevents a shared phone from receiving the previous account's chat push.
+      await cloud.push?.disable?.().catch(() => {});
       await Promise.all([
         cloud.memories?.unsubscribe?.(),
         cloud.world?.unsubscribe?.(),

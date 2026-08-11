@@ -1,4 +1,4 @@
-const CACHE_VERSION = "koi-bugfix-v12";
+const CACHE_VERSION = "koi-push-v13";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -14,6 +14,7 @@ const APP_SHELL = [
   "./services/shared-state.js",
   "./services/world.js",
   "./features/koi-world.js",
+  "./services/push-notifications.js",
   "./services/chat.js",
   "./features/koi-chat.js",
   "./services/live-sync.js",
@@ -85,4 +86,43 @@ self.addEventListener("fetch", event => {
 
 self.addEventListener("message", event => {
   if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
+
+
+self.addEventListener("push", event => {
+  let payload = {};
+  try { payload = event.data?.json?.() || {}; }
+  catch {
+    try { payload = { body: event.data?.text?.() || "You have a new Koi message 💬" }; }
+    catch { payload = {}; }
+  }
+
+  const title = payload.title || "Koi 💗";
+  const target = new URL(payload.url || "./#chat", self.registration.scope).href;
+  const options = {
+    body: payload.body || "Your person sent you a message 💬",
+    icon: new URL("./icon/icon-192.png", self.registration.scope).href,
+    badge: new URL("./icon/icon-192.png", self.registration.scope).href,
+    tag: payload.tag || "koi-chat",
+    renotify: true,
+    data: { url: target, type: payload.type || "chat-message", messageId: payload.messageId || null }
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const target = event.notification.data?.url || new URL("./#chat", self.registration.scope).href;
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of windows) {
+      try {
+        await client.focus();
+        client.postMessage({ type: "KOI_OPEN_CHAT" });
+        return;
+      } catch {}
+    }
+    await self.clients.openWindow(target);
+  })());
 });

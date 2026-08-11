@@ -995,7 +995,7 @@ function renderYou() {
       <div class="setting-list">
         ${settingSwitch("Daily question", "A gentle reminder for your daily Koi question", "dailyReminder", state.settings.dailyReminder)}
         ${settingSwitch("Weekly check-in", "A little Sunday relationship pulse", "weeklyCheckin", state.settings.weeklyCheckin)}
-        <button class="setting-row" data-action="request-notifications" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">♢</span><div><strong>Browser notifications</strong><small>Ask this device for notification permission.</small></div><span>›</span></button>
+        <button class="setting-row" data-action="request-notifications" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">🔔</span><div><strong>Message notifications</strong><small>Get a notification when your partner sends a chat message, even when Koi is closed.</small></div><span>›</span></button>
       </div>
 
       <div class="section-heading"><h2>App & data</h2></div>
@@ -1440,9 +1440,21 @@ function importData() {
   input.click();
 }
 
-function requestNotifications() {
+async function requestNotifications() {
+  state.settings.notificationPermissionAsked = true;
+  saveState();
+  if (window.KoiCloud?.push?.enable) {
+    try {
+      const result = await window.KoiCloud.push.enable();
+      toast(result?.message || "Message notifications are on 💬");
+    } catch (error) {
+      toast(error?.message || "Notifications could not be enabled on this device");
+    }
+    return;
+  }
   if (!("Notification" in window)) { toast("Notifications are not supported here"); return; }
-  Notification.requestPermission().then(permission => { state.settings.notificationPermissionAsked = true; saveState(); toast(permission === "granted" ? "Notifications allowed ♡" : "Notification permission not granted"); });
+  const permission = await Notification.requestPermission();
+  toast(permission === "granted" ? "Notifications allowed ♡" : "Notification permission not granted");
 }
 
 async function installApp() {

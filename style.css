@@ -2120,3 +2120,26 @@ input[type="range"] { accent-color: var(--pink-deep); width: 100%; }
 @media (max-height: 650px) {
   .chat-panel { min-height: 350px; height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 146px); }
 }
+
+
+/* Step 30 — real background chat push notifications */
+.chat-notification-prompt {
+  width: 100%;
+  margin: 0 0 7px;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 25px 1fr 14px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--lavender) 52%, var(--border));
+  border-radius: 13px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--pink-soft) 72%, white), color-mix(in srgb, var(--lavender-soft) 66%, white));
+  color: var(--ink);
+  text-align: left;
+}
+.chat-notification-prompt > span:first-child { font-size: 16px; text-align: center; }
+.chat-notification-prompt > span:nth-child(2) { min-width: 0; display: grid; gap: 1px; }
+.chat-notification-prompt strong { font-size: 10px; line-height: 1.2; }
+.chat-notification-prompt small { color: var(--ink-muted); font-size: 8px; line-height: 1.25; }
+.chat-notification-prompt > span:last-child { color: var(--lavender-deep); font-size: 16px; text-align: right; }
+.chat-notification-prompt.is-denied { background: rgba(255,255,255,.78); border-color: var(--border); }

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Koi VAPID Key Generator</title>
+<style>body{font-family:system-ui;margin:32px;max-width:760px}button,input{font:inherit}button{padding:12px 16px}label{display:block;margin-top:18px;font-weight:700}textarea{width:100%;min-height:88px;margin-top:6px;padding:10px;box-sizing:border-box}p{line-height:1.5;color:#555}.row{display:flex;gap:8px;align-items:center}.row textarea{flex:1}</style>
+</head>
+<body>
+<h1>Koi 💗 VAPID Key Generator</h1>
+<p>This runs entirely in your browser. Generate the keys once, then copy them into Supabase Edge Function secrets. Do not commit the private key to GitHub.</p>
+<button id="generate">Generate VAPID keys</button>
+<label>VAPID_PUBLIC_KEY</label><div class="row"><textarea id="pub" readonly></textarea><button data-copy="pub">Copy</button></div>
+<label>VAPID_PRIVATE_KEY</label><div class="row"><textarea id="priv" readonly></textarea><button data-copy="priv">Copy</button></div>
+<script>
+const b64url=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+document.getElementById('generate').onclick=async()=>{
+ const keys=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+ const rawPub=await crypto.subtle.exportKey('raw',keys.publicKey);
+ const jwkPriv=await crypto.subtle.exportKey('jwk',keys.privateKey);
+ document.getElementById('pub').value=b64url(rawPub);
+ document.getElementById('priv').value=jwkPriv.d||'';
+};
+document.querySelectorAll('[data-copy]').forEach(btn=>btn.onclick=async()=>{const el=document.getElementById(btn.dataset.copy);await navigator.clipboard.writeText(el.value);btn.textContent='Copied';setTimeout(()=>btn.textContent='Copy',1000)});
+</script>
+</body></html>

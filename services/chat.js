@@ -128,6 +128,8 @@
       .select("id,pair_id,client_id,sender_id,body,reply_to_id,created_at,updated_at,edited_at")
       .single();
     if (error) throw error;
+    // Save first, then notify in the background. Push must never delay the chat UI.
+    Promise.resolve(cloud.push?.notifyChatMessage?.(data.id)).catch(() => {});
     return { ...data, reactions: [] };
   }
 

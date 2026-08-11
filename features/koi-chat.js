@@ -160,6 +160,15 @@
     return `Private with ${partner.display_name || "your person"}`;
   }
 
+  function notificationPromptHTML() {
+    if (!cloud.push?.supportsPush?.()) return "";
+    if (cloud.push.isSubscribed?.()) return "";
+    const denied = cloud.push.permission === "denied";
+    return `<button type="button" class="chat-notification-prompt ${denied ? "is-denied" : ""}" data-chat-action="enable-notifications">
+      <span>🔔</span><span><strong>${denied ? "Notifications are blocked" : "Turn on message notifications"}</strong><small>${denied ? "Allow Koi in your iPhone notification settings." : "Get a notification when your partner messages you."}</small></span><span>›</span>
+    </button>`;
+  }
+
   function shellHTML() {
     const partner = partnerMember();
     const canSend = Boolean(partner);
@@ -179,6 +188,7 @@
         </div>
 
         <div class="chat-composer-wrap">
+          ${notificationPromptHTML()}
           <div id="chatComposerContext" class="chat-composer-context" hidden></div>
           <form id="koiChatForm" class="chat-composer" autocomplete="off">
             <textarea id="chatComposerInput" maxlength="4000" rows="1" placeholder="${canSend ? "Message your person…" : "Chat unlocks when your partner joins"}" ${canSend ? "" : "disabled"}></textarea>
@@ -458,6 +468,16 @@
       return;
     }
     if (action === "load-older") return loadOlder();
+    if (action === "enable-notifications") {
+      try {
+        const result = await cloud.push?.enable?.();
+        toast(result?.message || "Message notifications are on 💬");
+        if (runtime.route === "chat") render();
+      } catch (error) {
+        toast(error?.message || "Notifications could not be enabled");
+      }
+      return;
+    }
     if (action === "cancel-context") {
       ui.replyToId = null;
       ui.editingId = null;
@@ -573,7 +593,9 @@
     if (delta < 1) return;
     const partner = partnerMember()?.display_name || "Your person";
     toast(`${partner} sent you a message 💬`);
-    if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") {
+    if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted" && !cloud.push?.isSubscribed?.()) {
+      // Legacy fallback only. Once real Web Push is subscribed, the service
+      // worker owns background notifications so the user never gets duplicates.
       try { new Notification("Koi 💗", { body: `${partner} sent you a message.`, icon: "icon/icon-192.png" }); } catch {}
     }
   });
