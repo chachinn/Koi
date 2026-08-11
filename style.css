@@ -962,3 +962,85 @@ input[type="range"] { accent-color: var(--pink-deep); width: 100%; }
   .suggestion-row { grid-template-columns: 1fr; }
   .suggestion-row > div:last-child { justify-content: flex-start; }
 }
+
+
+/* =========================================================
+   KOI CLOUD FOUNDATION 2.0
+   ========================================================= */
+
+.cloud-gate[hidden] { display: none !important; }
+.cloud-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--pink) 42%, transparent), transparent 36%),
+    radial-gradient(circle at 82% 20%, color-mix(in srgb, var(--lavender) 46%, transparent), transparent 40%),
+    linear-gradient(145deg, #fff9fc 0%, #fbf4ff 52%, #fff7fb 100%);
+}
+.cloud-gate-card {
+  width: min(100%, 520px);
+  padding: 24px;
+  border-radius: 28px;
+}
+.cloud-gate-brand {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(34px, 10vw, 54px);
+  line-height: 1;
+  color: var(--pink-deep);
+  margin-bottom: 18px;
+}
+.cloud-gate-brand span { font-size: .6em; vertical-align: .18em; }
+.cloud-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.7);
+  margin: 18px 0 14px;
+}
+.cloud-auth-tabs button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+}
+.cloud-auth-tabs button.is-active {
+  background: linear-gradient(135deg, var(--pink-soft), var(--lavender-soft));
+  box-shadow: 0 5px 16px rgba(127, 101, 170, .12);
+}
+.cloud-message {
+  margin: 14px 0;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--lavender) 60%, white);
+  border-radius: 15px;
+  background: var(--lavender-soft);
+  font-size: 13px;
+}
+.cloud-pair-grid { display: grid; gap: 12px; margin-top: 16px; }
+.cloud-security-note { text-align: center; margin: 12px 8px 0; }
+.invite-code-card { text-align: center; margin: 18px 0; }
+.invite-code-card strong {
+  display: block;
+  margin-top: 7px;
+  font-size: clamp(22px, 7vw, 34px);
+  letter-spacing: .08em;
+  color: var(--lavender-deep);
+  overflow-wrap: anywhere;
+}
+.cloud-status-card { margin-top: 14px; }
+.cloud-status-card .inline-actions { margin-top: 10px; }
+
+@media (min-width: 680px) {
+  .cloud-pair-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* Hide the same-device test account switcher when real Koi Cloud accounts are active. */
+.koi-cloud-ready .profile-switch { display: none !important; }

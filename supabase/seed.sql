@@ -1,0 +1,3 @@
+-- Koi seed file
+-- Keep production user/couple data OUT of this file.
+-- Static question packs currently live in data/data.js so the PWA can use them offline.

@@ -1,10 +1,17 @@
-const CACHE_VERSION = "koi-build1-v4-data-folder";
+const CACHE_VERSION = "koi-foundation-2-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
   "./data/data.js",
+  "./config/supabase-config.js",
+  "./services/supabase.js",
+  "./services/auth.js",
+  "./services/pairs.js",
+  "./services/little-things.js",
+  "./services/sync.js",
+  "./services/cloud-bootstrap.js",
   "./manifest.json",
   "./icon/icon-192.png",
   "./icon/icon-512.png",

@@ -97,5 +97,17 @@
 
   <script src="data/data.js" defer></script>
   <script src="app.js" defer></script>
+
+  <!-- Koi Cloud Foundation 2.0
+       Supabase's publishable key is safe for browser use when RLS is enabled.
+       NEVER place a secret/service-role key in these files. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.min.js" defer></script>
+  <script src="config/supabase-config.js" defer></script>
+  <script src="services/supabase.js" defer></script>
+  <script src="services/auth.js" defer></script>
+  <script src="services/pairs.js" defer></script>
+  <script src="services/little-things.js" defer></script>
+  <script src="services/sync.js" defer></script>
+  <script src="services/cloud-bootstrap.js" defer></script>
 </body>
 </html>

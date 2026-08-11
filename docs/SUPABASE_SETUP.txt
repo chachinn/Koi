@@ -1,0 +1,101 @@
+KOI 💗 — SUPABASE FREE SETUP
+Foundation 2.0
+
+GOAL
+Two real accounts + one private pair + Little Things syncing live between phones.
+
+THIS DEVELOPMENT PLAN IS DESIGNED TO COST ₱0.
+Use a Supabase Free organization/project and GitHub Pages.
+
+STEP 1 — CREATE THE FREE SUPABASE PROJECT
+1. Go to Supabase and create a project under a FREE organization.
+2. Keep the project on the Free plan.
+3. Do not add paid add-ons.
+
+STEP 2 — APPLY THE DATABASE MIGRATION
+Recommended production workflow:
+1. Install/use the Supabase CLI.
+2. Keep the included supabase/migrations folder in GitHub.
+3. Link this project to your Supabase project.
+4. Run the migration with:
+   supabase db push
+
+For quick first testing, you may paste the migration SQL into the SQL Editor,
+but after that, keep future schema changes in migration files so GitHub remains
+the source of truth.
+
+Migration file:
+supabase/migrations/202608110001_koi_foundation_v1.sql
+
+STEP 3 — AUTH SETTINGS
+In Supabase Authentication:
+1. Email/password authentication can remain enabled.
+2. Keep email confirmation ON for the production direction.
+3. Set Site URL to your live GitHub Pages Koi URL.
+4. Add your live Koi URL to allowed redirect URLs.
+5. While testing locally, add the exact local test URL only if needed.
+
+STEP 4 — GET THE TWO BROWSER-SAFE VALUES
+Open the project's Connect dialog / API Keys page and copy:
+- Project URL
+- Publishable key (sb_publishable_...)
+
+DO NOT COPY:
+- Secret key (sb_secret_...)
+- service_role key
+
+STEP 5 — EDIT ONE FILE
+Open:
+config/supabase-config.js
+
+Fill in:
+supabaseUrl: "https://YOUR_PROJECT.supabase.co"
+supabasePublishableKey: "sb_publishable_..."
+
+That's the only file that needs your project-specific values.
+
+STEP 6 — GITHUB
+Upload the complete Koi folder to your repository, preserving:
+config/
+services/
+supabase/
+data/
+icon/
+
+STEP 7 — TEST WITH TWO REAL ACCOUNTS
+PHONE A:
+1. Open/install Koi.
+2. Create account.
+3. Confirm email if prompted.
+4. Sign in.
+5. Create Koi pair.
+6. Copy the KOI-... invite code.
+
+PHONE B:
+1. Open/install Koi.
+2. Create a DIFFERENT account.
+3. Confirm email.
+4. Sign in.
+5. Choose Join my partner.
+6. Enter the invite code.
+
+TEST:
+Phone A → Little Things → add an entry.
+It should appear on Phone B automatically.
+Then test Phone B → add an entry → confirm Phone A updates.
+
+WHAT IS CLOUD-SYNCED IN FOUNDATION 2.0
+- Authentication
+- Real pair creation/joining
+- Pair/member profiles
+- Little Things
+- Offline queue for Little Things create/delete
+- Private Realtime Broadcast for Little Things
+
+WHAT REMAINS LOCAL FOR NOW
+The rest of the existing Koi features are intentionally still local.
+We migrate them one feature at a time after this foundation is proven on two phones.
+
+SECURITY RULE
+Never place a Supabase secret/service-role key in GitHub or browser JavaScript.
+The browser uses only the publishable key. RLS is what protects each pair's data.

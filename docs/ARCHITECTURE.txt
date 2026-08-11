@@ -1,0 +1,60 @@
+KOI 💗 — FOUNDATION 2.0 ARCHITECTURE
+
+SOURCE OF TRUTH
+Cloud-shared data: Supabase Postgres
+Offline / fast local data: browser storage/cache
+Static offline content: data/data.js
+
+TENANCY MODEL
+User -> pair_members -> Pair
+Every shared record carries pair_id.
+A user can belong to only one pair in v1.
+A pair can contain at most two users.
+
+SECURITY
+- Authentication: Supabase Auth.
+- Authorization: Postgres Row Level Security.
+- Pair joins: SECURITY DEFINER RPC, not direct table insertion.
+- Invite codes: one-time, expiring.
+- Media: private Supabase Storage bucket.
+- Realtime: private pair-scoped Broadcast topics.
+- No service-role/secret key in browser code.
+
+REALTIME TOPIC PATTERN
+pair:<PAIR_UUID>:little_things
+
+The database emits a Broadcast after Little Things INSERT/UPDATE/DELETE.
+Only authenticated members of that pair are allowed to subscribe.
+
+WHY LITTLE THINGS FIRST
+It is a simple shared CRUD feature. If:
+Phone A creates -> Phone B receives -> Phone B deletes -> Phone A updates,
+then Auth + RLS + pair tenancy + writes + reads + realtime have all been proven.
+
+MIGRATION ORDER AFTER FOUNDATION
+1. Daily Questions + secure answer reveal RPC
+2. Check-ins
+3. Date Jar
+4. Memories
+5. Same Moment, Two Sides + secure reveal RPC
+6. Lore
+7. Eras + Museum
+8. Canon + challenges
+9. Traditions
+10. Predictions / Blind Date
+11. Room state
+12. Theme preferences
+13. Media uploads + image compression
+
+OFFLINE
+Foundation 2.0 includes a small operation queue for Little Things.
+A later sync phase should add:
+- retry backoff
+- deduplication for every mutable feature
+- conflict rules
+- queue visibility/debug screen
+- media upload queue
+
+FREE-DEVELOPMENT RULE
+Architecture should scale cleanly, but development stays on free services.
+Do not add a paid dependency unless intentionally approved later.
