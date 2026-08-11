@@ -41,6 +41,18 @@
       return data;
     },
 
+    async signInWithGoogle() {
+      const client = requireClient();
+      const { data, error } = await client.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: cloud.config.authRedirectUrl
+        }
+      });
+      if (error) throw error;
+      return data;
+    },
+
     async signOut() {
       const client = requireClient();
       if (cloud.runtime.channel) {

@@ -66,6 +66,15 @@
         <button class="button button-primary button-block" type="submit">Sign in 💗</button>
       </form>
       <button class="button button-ghost button-block" data-cloud-action="forgot-password">Forgot password?</button>
+      <div style="display:flex;align-items:center;gap:10px;margin:15px 0 12px;color:var(--ink-muted);font-size:11px;">
+        <span style="height:1px;flex:1;background:var(--border);"></span>
+        <span>OR</span>
+        <span style="height:1px;flex:1;background:var(--border);"></span>
+      </div>
+      <button class="button button-secondary button-block" type="button" data-cloud-action="sign-in-google" aria-label="Continue with Google">
+        <span aria-hidden="true" style="display:inline-grid;place-items:center;width:23px;height:23px;margin-right:7px;border-radius:50%;background:#fff;border:1px solid var(--border);font:700 14px Arial,sans-serif;">G</span>
+        Continue with Google
+      </button>
       <p class="micro muted cloud-security-note">Koi uses your browser-safe Supabase publishable key. Access to couple data is enforced in the database with Row Level Security.</p>
     `);
   }
@@ -406,6 +415,20 @@
         toast("Password reset email sent");
       } catch (error) {
         toast(error.message || "Could not send reset email");
+      }
+      return;
+    }
+
+    if (action === "sign-in-google") {
+      const originalHTML = button.innerHTML;
+      button.disabled = true;
+      button.textContent = "Opening Google…";
+      try {
+        await cloud.auth.signInWithGoogle();
+      } catch (error) {
+        button.disabled = false;
+        button.innerHTML = originalHTML;
+        renderAuthGate(error.message || "Could not open Google sign-in.");
       }
       return;
     }
