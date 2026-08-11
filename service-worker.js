@@ -1,4 +1,4 @@
-const CACHE_VERSION = "koi-chat-v11";
+const CACHE_VERSION = "koi-bugfix-v12";
 const APP_SHELL = [
   "./",
   "./index.html",

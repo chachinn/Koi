@@ -13,6 +13,7 @@
   let unreadInitialized = false;
   let flushing = null;
   let lastMarkedId = null;
+  let lastMarkedAt = 0;
 
   function currentUserId() {
     return cloud.runtime?.session?.user?.id || null;
@@ -51,7 +52,10 @@
   }
 
   function queuedForPair(pairId = activePairId) {
-    return loadOutbox().filter(row => row.pair_id === pairId);
+    const userId = currentUserId();
+    if (!pairId || !userId) return [];
+    // Keep offline messages account-scoped on shared devices.
+    return loadOutbox().filter(row => row.pair_id === pairId && row.sender_id === userId);
   }
 
   function enqueue(row) {
@@ -302,8 +306,11 @@
   async function markRead(message = null, pairId = activePairId) {
     if (!pairId || !currentUserId()) return;
     const markId = message?.id && !String(message.id).startsWith("queued_") ? message.id : null;
-    if (markId && markId === lastMarkedId && unreadCount === 0) return;
     const when = message?.created_at || new Date().toISOString();
+    const whenMs = Number.isFinite(Date.parse(when)) ? Date.parse(when) : Date.now();
+    // Never move a read cursor backwards if two refreshes finish out of order.
+    if (whenMs < lastMarkedAt) return;
+    if (markId && markId === lastMarkedId && unreadCount === 0) return;
     const { error } = await cloud.client
       .from("chat_read_state")
       .upsert({
@@ -314,6 +321,7 @@
       }, { onConflict: "pair_id,user_id" });
     if (error) throw error;
     lastMarkedId = markId;
+    lastMarkedAt = Math.max(lastMarkedAt, whenMs);
     paintUnreadBadge(0);
   }
 
@@ -374,6 +382,7 @@
     activePairId = pairId || null;
     unreadInitialized = false;
     lastMarkedId = null;
+    lastMarkedAt = 0;
     paintUnreadBadge(0);
     if (!activePairId) return;
     await connectTyping(activePairId).catch(error => console.warn("Koi typing channel unavailable", error));
@@ -389,6 +398,7 @@
     activePairId = null;
     unreadInitialized = false;
     lastMarkedId = null;
+    lastMarkedAt = 0;
     paintUnreadBadge(0);
   }
 

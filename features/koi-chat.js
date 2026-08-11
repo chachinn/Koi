@@ -20,6 +20,7 @@
     sentTypingAt: 0,
     stopTypingTimer: null,
     refreshTimer: null,
+    readTimer: null,
     shouldStickToBottom: true
   };
 
@@ -33,7 +34,7 @@
   function isMine(message) { return message?.sender_id === meId(); }
   function e(value) { return escapeHTML(value); }
 
-  function draftKey() { return `koi_chat_draft_v1:${pairId() || "none"}`; }
+  function draftKey() { return `koi_chat_draft_v1:${pairId() || "none"}:${meId() || "signed-out"}`; }
   function getDraft() {
     try { return localStorage.getItem(draftKey()) || ""; } catch { return ""; }
   }
@@ -251,6 +252,21 @@
     input.style.height = `${Math.min(116, Math.max(42, input.scrollHeight))}px`;
   }
 
+  function chatListNearBottom() {
+    const list = document.getElementById("chatMessageList");
+    if (!list) return false;
+    return list.scrollHeight - list.scrollTop - list.clientHeight < 110;
+  }
+
+  function markVisibleChatReadSoon() {
+    clearTimeout(ui.readTimer);
+    ui.readTimer = setTimeout(() => {
+      if (runtime.route !== "chat" || document.visibilityState !== "visible" || !chatListNearBottom()) return;
+      const latest = ui.messages[ui.messages.length - 1];
+      if (latest) cloud.chat?.markRead?.(latest, pairId()).catch(() => {});
+    }, 180);
+  }
+
   function replaceRecentRows(fetched) {
     const rows = fetched.rows || [];
     if (!ui.messages.length) {
@@ -291,12 +307,15 @@
     const pid = pairId();
     if (!pid || !cloud.chat || !ui.loaded) return loadInitial();
     if (ui.loading) return;
+    const wasReadingNewest = forceBottom || (runtime.route === "chat" && document.visibilityState === "visible" && chatListNearBottom());
     ui.loading = true;
     try {
       const fetched = await cloud.chat.listRecent(pid, { limit: 60 });
       replaceRecentRows(fetched);
       paintMessages({ preserveScroll: true, stickBottom: forceBottom });
-      if (runtime.route === "chat") {
+      // Do not mark a newly arrived message as read while someone is scrolled up
+      // reading older history. The cursor advances once the newest messages are visible.
+      if (wasReadingNewest) {
         const latest = ui.messages[ui.messages.length - 1];
         if (latest) await cloud.chat.markRead(latest, pid).catch(() => {});
       }
@@ -510,6 +529,11 @@
       }
     }
   });
+
+  document.addEventListener("scroll", event => {
+    if (event.target?.id !== "chatMessageList") return;
+    if (chatListNearBottom()) markVisibleChatReadSoon();
+  }, true);
 
   window.addEventListener("koi:chat-sync", () => {
     clearTimeout(ui.refreshTimer);
