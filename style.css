@@ -1178,3 +1178,285 @@ input[type="range"] { accent-color: var(--pink-deep); width: 100%; }
   }
   .relationship-date-list strong { text-align: left; }
 }
+
+/* =========================================================
+   KOI STEP 22 — CUSTOM COLORS + EXPANDED WALLPAPERS
+   ========================================================= */
+
+.app-shell[data-wallpaper="gingham"] {
+  background-color: var(--cream);
+  background-image:
+    linear-gradient(90deg, color-mix(in srgb, var(--pink) 18%, transparent) 50%, transparent 50%),
+    linear-gradient(color-mix(in srgb, var(--lavender) 16%, transparent) 50%, transparent 50%);
+  background-size: 42px 42px;
+}
+
+.app-shell[data-wallpaper="bubbles"] {
+  background:
+    radial-gradient(circle at 18px 18px, color-mix(in srgb, var(--pink) 28%, transparent) 0 7px, transparent 8px),
+    radial-gradient(circle at 54px 52px, color-mix(in srgb, var(--lavender) 26%, transparent) 0 10px, transparent 11px),
+    linear-gradient(160deg, var(--pink-soft), var(--cream) 46%, var(--lavender-soft));
+  background-size: 72px 72px, 90px 90px, auto;
+}
+
+.app-shell[data-wallpaper="sparkle"] {
+  background:
+    linear-gradient(45deg, transparent 47%, color-mix(in srgb, var(--pink-deep) 24%, transparent) 48% 52%, transparent 53%) 0 0 / 66px 66px,
+    linear-gradient(-45deg, transparent 47%, color-mix(in srgb, var(--lavender-deep) 22%, transparent) 48% 52%, transparent 53%) 33px 33px / 66px 66px,
+    linear-gradient(165deg, var(--cream), var(--pink-soft) 54%, var(--lavender-soft));
+}
+
+.app-shell[data-wallpaper="waves"] {
+  background:
+    radial-gradient(ellipse at 50% 0, transparent 0 33px, color-mix(in srgb, var(--pink) 20%, transparent) 34px 38px, transparent 39px) 0 0 / 78px 42px,
+    radial-gradient(ellipse at 50% 0, transparent 0 33px, color-mix(in srgb, var(--lavender) 20%, transparent) 34px 38px, transparent 39px) 39px 21px / 78px 42px,
+    var(--cream);
+}
+
+.app-shell[data-wallpaper="confetti"] {
+  background:
+    radial-gradient(circle at 20px 18px, var(--pink) 0 3px, transparent 4px),
+    radial-gradient(circle at 62px 44px, var(--lavender) 0 4px, transparent 5px),
+    linear-gradient(35deg, transparent 47%, color-mix(in srgb, var(--pink-deep) 25%, transparent) 48% 52%, transparent 53%) 12px 56px / 84px 84px,
+    linear-gradient(140deg, var(--cream), var(--pink-soft) 65%, var(--lavender-soft));
+  background-size: 82px 82px, 96px 96px, 84px 84px, auto;
+}
+
+.app-shell[data-wallpaper="soft"] {
+  background:
+    radial-gradient(circle at 12% 12%, color-mix(in srgb, var(--pink) 38%, transparent), transparent 26%),
+    radial-gradient(circle at 88% 28%, color-mix(in srgb, var(--lavender) 38%, transparent), transparent 28%),
+    radial-gradient(circle at 40% 76%, color-mix(in srgb, var(--pink) 18%, transparent), transparent 34%),
+    linear-gradient(180deg, #fff, var(--cream));
+}
+
+.app-shell[data-wallpaper="custom"] {
+  --custom-wallpaper-overlay-color: rgba(255, 250, 253, .34);
+  background-image:
+    linear-gradient(var(--custom-wallpaper-overlay-color), var(--custom-wallpaper-overlay-color)),
+    linear-gradient(145deg, color-mix(in srgb, var(--pink-soft) 18%, transparent), color-mix(in srgb, var(--lavender-soft) 18%, transparent)),
+    var(--custom-wallpaper-image);
+  background-size: 100% 100%, 100% 100%, cover;
+  background-repeat: no-repeat;
+  background-position: center, center, center;
+}
+
+.app-shell[data-wallpaper="custom"][data-wallpaper-overlay="light"] { --custom-wallpaper-overlay-color: rgba(255, 250, 253, .18); }
+.app-shell[data-wallpaper="custom"][data-wallpaper-overlay="medium"] { --custom-wallpaper-overlay-color: rgba(255, 250, 253, .34); }
+.app-shell[data-wallpaper="custom"][data-wallpaper-overlay="strong"] { --custom-wallpaper-overlay-color: rgba(255, 250, 253, .52); }
+.app-shell[data-wallpaper="custom"][data-wallpaper-position="top"] { background-position: center, center, center top; }
+.app-shell[data-wallpaper="custom"][data-wallpaper-position="center"] { background-position: center, center, center center; }
+.app-shell[data-wallpaper="custom"][data-wallpaper-position="bottom"] { background-position: center, center, center bottom; }
+
+.custom-color-card.is-active,
+.custom-wallpaper-card.is-active {
+  outline: 2px solid color-mix(in srgb, var(--pink-deep) 45%, var(--lavender-deep));
+}
+
+.custom-color-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.custom-color-field > span {
+  display: block;
+  margin: 0 0 6px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.custom-color-field > div {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.custom-color-field input[type="color"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 48px;
+  height: 46px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,.9);
+  overflow: hidden;
+}
+
+.custom-color-field input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.custom-color-field input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 10px; }
+.custom-color-field input[type="text"] {
+  min-width: 0;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,.92);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.wallpaper-grid-expanded {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wallpaper-option {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: center;
+  cursor: pointer;
+}
+
+.wallpaper-option .wallpaper-tile {
+  display: block;
+  width: 100%;
+  min-height: 76px;
+}
+
+.wallpaper-option strong {
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+.wallpaper-option.is-active .wallpaper-tile {
+  outline: 2px solid color-mix(in srgb, var(--pink-deep) 48%, var(--lavender-deep));
+  outline-offset: 1px;
+}
+
+.wallpaper-option.is-active .wallpaper-tile::after {
+  content: "✓";
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--pink-deep) 58%, var(--lavender-deep));
+  color: white;
+  font-size: 11px;
+}
+
+.wallpaper-gingham {
+  background-color: var(--cream);
+  background-image:
+    linear-gradient(90deg, color-mix(in srgb, var(--pink) 24%, transparent) 50%, transparent 50%),
+    linear-gradient(color-mix(in srgb, var(--lavender) 22%, transparent) 50%, transparent 50%);
+  background-size: 24px 24px;
+}
+
+.wallpaper-bubbles {
+  background:
+    radial-gradient(circle at 22% 26%, var(--pink) 0 9%, transparent 10%),
+    radial-gradient(circle at 72% 62%, var(--lavender) 0 13%, transparent 14%),
+    linear-gradient(145deg, var(--pink-soft), var(--lavender-soft));
+}
+
+.wallpaper-sparkle {
+  background:
+    linear-gradient(45deg, transparent 46%, color-mix(in srgb, var(--pink-deep) 36%, transparent) 47% 53%, transparent 54%) center / 38px 38px,
+    linear-gradient(-45deg, transparent 46%, color-mix(in srgb, var(--lavender-deep) 34%, transparent) 47% 53%, transparent 54%) center / 38px 38px,
+    var(--cream);
+}
+
+.wallpaper-waves {
+  background:
+    radial-gradient(ellipse at 50% 0, transparent 0 18px, color-mix(in srgb, var(--pink) 34%, transparent) 19px 21px, transparent 22px) 0 0 / 42px 26px,
+    radial-gradient(ellipse at 50% 0, transparent 0 18px, color-mix(in srgb, var(--lavender) 34%, transparent) 19px 21px, transparent 22px) 21px 13px / 42px 26px,
+    var(--cream);
+}
+
+.wallpaper-confetti {
+  background:
+    radial-gradient(circle at 18% 24%, var(--pink) 0 4%, transparent 5%),
+    radial-gradient(circle at 74% 64%, var(--lavender) 0 5%, transparent 6%),
+    linear-gradient(38deg, transparent 47%, color-mix(in srgb, var(--pink-deep) 30%, transparent) 48% 52%, transparent 53%),
+    var(--cream);
+}
+
+.wallpaper-soft {
+  background:
+    radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--pink) 54%, transparent), transparent 34%),
+    radial-gradient(circle at 80% 68%, color-mix(in srgb, var(--lavender) 52%, transparent), transparent 36%),
+    white;
+}
+
+.custom-wallpaper-preview {
+  min-height: 180px;
+  border: 1.5px dashed color-mix(in srgb, var(--pink) 52%, var(--lavender));
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(255,255,255,.74), var(--pink-soft), var(--lavender-soft));
+  text-align: center;
+  color: var(--ink-muted);
+}
+
+.custom-wallpaper-preview > div { padding: 24px; }
+.custom-wallpaper-preview > div > span { font-size: 30px; color: var(--pink-deep); }
+.custom-wallpaper-preview p { margin: 8px 0 3px; }
+.custom-wallpaper-preview small { font-size: 10px; }
+.custom-wallpaper-preview.has-photo { border-style: solid; }
+.custom-wallpaper-preview img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+}
+
+.custom-wallpaper-file-button {
+  width: 100%;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.compact-setting-row { padding: 11px 12px; }
+.wallpaper-control-group { margin-top: 14px; }
+.wallpaper-control-group > strong {
+  display: block;
+  margin: 0 0 7px 2px;
+  font-size: 11px;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.segmented-control button {
+  min-height: 40px;
+  padding: 8px 6px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.76);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.segmented-control button.is-active {
+  border-color: color-mix(in srgb, var(--pink-deep) 44%, var(--lavender-deep));
+  background: linear-gradient(145deg, var(--pink-soft), var(--lavender-soft));
+  color: var(--ink);
+}
+
+@media (max-width: 420px) {
+  .custom-color-grid { grid-template-columns: 1fr; }
+  .wallpaper-grid-expanded { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

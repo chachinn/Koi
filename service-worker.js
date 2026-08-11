@@ -1,4 +1,4 @@
-const CACHE_VERSION = "koi-foundation-2-v4-relationship-media";
+const CACHE_VERSION = "koi-foundation-2-v5-custom-colors-wallpapers";
 const APP_SHELL = [
   "./",
   "./index.html",

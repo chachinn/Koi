@@ -87,6 +87,51 @@ const THEME_PAIRS = {
   }
 };
 
+const WALLPAPER_OPTIONS = [
+  { id: "petals", label: "Petals" },
+  { id: "clouds", label: "Clouds" },
+  { id: "ribbon", label: "Ribbon" },
+  { id: "gingham", label: "Gingham" },
+  { id: "bubbles", label: "Bubbles" },
+  { id: "sparkle", label: "Sparkle" },
+  { id: "waves", label: "Waves" },
+  { id: "confetti", label: "Confetti" },
+  { id: "soft", label: "Soft Glow" }
+];
+
+function normalizeHexColor(value, fallback = "#F3B8D0") {
+  const raw = String(value || "").trim().toUpperCase();
+  if (/^#[0-9A-F]{6}$/.test(raw)) return raw;
+  if (/^[0-9A-F]{6}$/.test(raw)) return `#${raw}`;
+  return fallback;
+}
+
+function mixHexColor(color, target, amount) {
+  const from = normalizeHexColor(color).slice(1);
+  const to = normalizeHexColor(target, "#FFFFFF").slice(1);
+  const ratio = Math.max(0, Math.min(1, Number(amount) || 0));
+  const out = [0, 2, 4].map(index => {
+    const a = parseInt(from.slice(index, index + 2), 16);
+    const b = parseInt(to.slice(index, index + 2), 16);
+    return Math.round(a + (b - a) * ratio).toString(16).padStart(2, "0");
+  }).join("");
+  return `#${out.toUpperCase()}`;
+}
+
+function customThemeFromSettings(settings = {}) {
+  const first = normalizeHexColor(settings.customColorOne, "#F3B8D0");
+  const second = normalizeHexColor(settings.customColorTwo, "#D7C4F2");
+  return {
+    label: "Our Custom Colors",
+    pink: first,
+    pinkDeep: mixHexColor(first, "#000000", 0.18),
+    pinkSoft: mixHexColor(first, "#FFFFFF", 0.80),
+    lavender: second,
+    lavenderDeep: mixHexColor(second, "#000000", 0.18),
+    lavenderSoft: mixHexColor(second, "#FFFFFF", 0.80)
+  };
+}
+
 const clone = value => JSON.parse(JSON.stringify(value));
 const uid = prefix => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 const todayKey = () => new Date().toLocaleDateString("en-CA");
@@ -191,7 +236,13 @@ const DEFAULT_STATE = {
   },
   settings: {
     themePair: "wedding",
+    customColorOne: "#F3B8D0",
+    customColorTwo: "#D7C4F2",
     wallpaper: "petals",
+    customWallpaperPhoto: "",
+    customWallpaperEnabled: false,
+    customWallpaperOverlay: "medium",
+    customWallpaperPosition: "center",
     dailyReminder: true,
     weeklyCheckin: true,
     notificationPermissionAsked: false,
@@ -341,7 +392,9 @@ function saveState() {
 }
 
 function applyTheme() {
-  const theme = THEME_PAIRS[state.settings.themePair] || THEME_PAIRS.wedding;
+  const theme = state.settings.themePair === "custom"
+    ? customThemeFromSettings(state.settings)
+    : (THEME_PAIRS[state.settings.themePair] || THEME_PAIRS.wedding);
   const root = document.documentElement;
   root.style.setProperty("--pink", theme.pink);
   root.style.setProperty("--pink-deep", theme.pinkDeep);
@@ -350,7 +403,13 @@ function applyTheme() {
   root.style.setProperty("--lavender-deep", theme.lavenderDeep);
   root.style.setProperty("--lavender-soft", theme.lavenderSoft);
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.pink);
-  appShell.dataset.wallpaper = state.settings.wallpaper || "petals";
+
+  const customPhoto = String(state.settings.customWallpaperPhoto || "");
+  const useCustomPhoto = Boolean(customPhoto && state.settings.customWallpaperEnabled);
+  appShell.dataset.wallpaper = useCustomPhoto ? "custom" : (state.settings.wallpaper || "petals");
+  appShell.dataset.wallpaperOverlay = state.settings.customWallpaperOverlay || "medium";
+  appShell.dataset.wallpaperPosition = state.settings.customWallpaperPosition || "center";
+  root.style.setProperty("--custom-wallpaper-image", customPhoto ? `url(${customPhoto})` : "none");
 }
 
 function currentProfile() { return state.profiles.find(profile => profile.id === state.currentUserId) || state.profiles[0]; }
@@ -821,24 +880,54 @@ function renderThenNow() {
 function renderYou() {
   const me = currentProfile();
   const partner = partnerProfile();
+  const customOne = normalizeHexColor(state.settings.customColorOne, "#F3B8D0");
+  const customTwo = normalizeHexColor(state.settings.customColorTwo, "#D7C4F2");
+  const hasCustomWallpaper = Boolean(state.settings.customWallpaperPhoto);
+  const customWallpaperOn = Boolean(hasCustomWallpaper && state.settings.customWallpaperEnabled);
+  const overlay = state.settings.customWallpaperOverlay || "medium";
+  const position = state.settings.customWallpaperPosition || "center";
   setFab();
   mainView.innerHTML = `
     <section class="page">
-      <div class="page-header"><div><p class="eyebrow">PERSONALIZE</p><h1>You</h1><p>Make Koi truly yours — but always pink + lavender.</p></div><div class="avatar avatar-lg">${escapeHTML(me.avatar)}</div></div>
+      <div class="page-header"><div><p class="eyebrow">PERSONALIZE</p><h1>You</h1><p>Make Koi truly yours — choose the colors and wallpaper that feel like you.</p></div><div class="avatar avatar-lg">${escapeHTML(me.avatar)}</div></div>
 
       <article class="card">
         <div class="partner-row" style="padding:0;border:0;background:none"><div class="avatar avatar-lg">${escapeHTML(me.avatar)}</div><div><strong style="font-size:16px">${escapeHTML(me.displayName)}</strong><small>Paired with ${escapeHTML(partner.displayName)} · anniversary ${escapeHTML(formatDate(state.pair.anniversary))}</small></div><button class="button button-ghost" data-action="edit-profile" style="min-height:36px;padding:7px 11px">Edit</button></div>
       </article>
 
-      <div class="section-heading"><h2>Our colors</h2><span class="micro muted">two colors, always</span></div>
+      <div class="section-heading"><h2>Our colors</h2><span class="micro muted">pick any two</span></div>
       <div class="theme-pairs">
         ${Object.entries(THEME_PAIRS).map(([id, theme]) => `<button class="theme-pair ${state.settings.themePair === id ? "is-active" : ""}" data-action="set-theme" data-id="${id}"><div class="swatches"><span class="swatch" style="background:${theme.pink}"></span><span class="swatch" style="background:${theme.lavender}"></span></div><strong>${escapeHTML(theme.label)}</strong></button>`).join("")}
       </div>
 
-      <div class="section-heading"><h2>Wallpaper</h2><span class="micro muted">pink + lavender</span></div>
-      <div class="wallpaper-grid">
-        ${["petals", "clouds", "ribbon"].map(id => `<button class="wallpaper-tile wallpaper-${id} ${state.settings.wallpaper === id ? "is-active" : ""}" data-action="set-wallpaper" data-id="${id}" aria-label="${id} wallpaper"></button>`).join("")}
+      <article class="card custom-color-card ${state.settings.themePair === "custom" ? "is-active" : ""}" style="margin-top:10px">
+        <div class="section-heading" style="margin:0 0 10px"><div><p class="eyebrow">CUSTOM COLORS</p><h3>Choose your exact pair</h3></div><div class="swatches"><span class="swatch" id="customColorPreviewOne" style="background:${customOne}"></span><span class="swatch" id="customColorPreviewTwo" style="background:${customTwo}"></span></div></div>
+        <div class="custom-color-grid">
+          <label class="custom-color-field"><span>Color 1</span><div><input id="customColorPickerOne" type="color" value="${customOne}" data-custom-color-picker="one"><input id="customColorHexOne" type="text" value="${customOne}" maxlength="7" inputmode="text" spellcheck="false" data-custom-color-hex="one" aria-label="Color 1 hex code"></div></label>
+          <label class="custom-color-field"><span>Color 2</span><div><input id="customColorPickerTwo" type="color" value="${customTwo}" data-custom-color-picker="two"><input id="customColorHexTwo" type="text" value="${customTwo}" maxlength="7" inputmode="text" spellcheck="false" data-custom-color-hex="two" aria-label="Color 2 hex code"></div></label>
+        </div>
+        <button class="button button-primary button-block" data-action="apply-custom-theme" style="margin-top:12px">Use these colors</button>
+      </article>
+
+      <div class="section-heading"><h2>Wallpaper</h2><span class="micro muted">patterns + photo</span></div>
+      <div class="wallpaper-grid wallpaper-grid-expanded">
+        ${WALLPAPER_OPTIONS.map(item => `<button class="wallpaper-option ${!customWallpaperOn && state.settings.wallpaper === item.id ? "is-active" : ""}" data-action="set-wallpaper" data-id="${item.id}" aria-label="${escapeHTML(item.label)} wallpaper"><span class="wallpaper-tile wallpaper-${item.id}"></span><strong>${escapeHTML(item.label)}</strong></button>`).join("")}
       </div>
+
+      <article class="card custom-wallpaper-card ${customWallpaperOn ? "is-active" : ""}" style="margin-top:12px">
+        <div class="section-heading" style="margin:0 0 10px"><div><p class="eyebrow">CUSTOM WALLPAPER</p><h2>Your photo</h2></div><span class="pill ${customWallpaperOn ? "pill-pink" : "pill-lavender"}">${customWallpaperOn ? "On" : "Off"}</span></div>
+        <div class="custom-wallpaper-preview ${hasCustomWallpaper ? "has-photo" : ""}">
+          ${hasCustomWallpaper ? `<img src="${escapeHTML(state.settings.customWallpaperPhoto)}" alt="Custom wallpaper preview">` : `<div><span>♡</span><p>Choose a photo from this device.</p><small>Koi compresses it before saving.</small></div>`}
+        </div>
+        <label class="button button-secondary custom-wallpaper-file-button">${hasCustomWallpaper ? "Choose another photo" : "Choose Photo"}<input id="customWallpaperFile" type="file" accept="image/*" hidden></label>
+        ${hasCustomWallpaper ? `
+          <div class="setting-row compact-setting-row" style="margin-top:12px"><span class="setting-icon">♡</span><div><strong>Photo wallpaper</strong><small>Turn the saved photo background on or off.</small></div><label class="switch"><input type="checkbox" data-action="toggle-setting" data-key="customWallpaperEnabled" ${customWallpaperOn ? "checked" : ""}><span class="switch-slider"></span></label></div>
+          <div class="wallpaper-control-group"><strong>Overlay strength</strong><div class="segmented-control">${["light","medium","strong"].map(value => `<button data-action="set-wallpaper-overlay" data-value="${value}" class="${overlay === value ? "is-active" : ""}">${value[0].toUpperCase() + value.slice(1)}</button>`).join("")}</div></div>
+          <div class="wallpaper-control-group"><strong>Photo position</strong><div class="segmented-control">${["top","center","bottom"].map(value => `<button data-action="set-wallpaper-position" data-value="${value}" class="${position === value ? "is-active" : ""}">${value[0].toUpperCase() + value.slice(1)}</button>`).join("")}</div></div>
+          <button class="button button-ghost button-block" data-action="remove-custom-wallpaper" style="margin-top:12px">Remove custom photo</button>
+        ` : ""}
+        <p class="micro muted" style="margin:10px 2px 0">The custom wallpaper is saved on this device and is included when you export a Koi backup.</p>
+      </article>
 
       <div class="section-heading"><h2>Reminders</h2></div>
       <div class="setting-list">
@@ -850,12 +939,10 @@ function renderYou() {
       <div class="section-heading"><h2>App & data</h2></div>
       <div class="setting-list">
         <button class="setting-row" data-action="install-app" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">＋</span><div><strong>Install Koi</strong><small>Add this PWA to your home screen when supported.</small></div><span>›</span></button>
-        <button class="setting-row" data-action="export-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">⇩</span><div><strong>Export my Koi data</strong><small>Download a JSON backup of Build 1.</small></div><span>›</span></button>
+        <button class="setting-row" data-action="export-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">⇩</span><div><strong>Export my Koi data</strong><small>Download a JSON backup of your local Koi settings and data.</small></div><span>›</span></button>
         <button class="setting-row" data-action="import-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">⇧</span><div><strong>Import Koi backup</strong><small>Restore a compatible JSON file.</small></div><span>›</span></button>
-        <button class="setting-row" data-action="reset-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">×</span><div><strong>Reset local Build 1</strong><small>Deletes Koi data saved on this device.</small></div><span>›</span></button>
+        <button class="setting-row" data-action="reset-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">×</span><div><strong>Reset local Koi</strong><small>Deletes Koi data saved on this device.</small></div><span>›</span></button>
       </div>
-
-      <article class="card card-lavender" style="margin-top:14px"><p class="eyebrow">PRIVACY IN BUILD 1</p><h3>Local-only prototype</h3><p class="small muted">Nothing is sent to a backend in this version. A real two-person app will need authentication, pair-level authorization, database sync and secure media storage before release.</p></article>
     </section>`;
 }
 
@@ -1273,8 +1360,19 @@ document.addEventListener("click", event => {
   else if (action === "increment-tradition") { const item = state.traditions.find(entry => entry.id === button.dataset.id); if (item) item.count += 1; saveState(); render(); toast("Tradition count +1 🎀"); }
   else if (action === "add-then-now") openAddThenNow();
   else if (action === "answer-then-now") answerThenNow(button.dataset.id);
-  else if (action === "set-theme") { state.settings.themePair = button.dataset.id; saveState(); render(); }
-  else if (action === "set-wallpaper") { state.settings.wallpaper = button.dataset.id; saveState(); render(); }
+  else if (action === "set-theme") { state.settings.themePair = button.dataset.id; saveState(); render(); toast("Colors updated ✦"); }
+  else if (action === "apply-custom-theme") {
+    const first = normalizeHexColor(document.getElementById("customColorHexOne")?.value || document.getElementById("customColorPickerOne")?.value, state.settings.customColorOne || "#F3B8D0");
+    const second = normalizeHexColor(document.getElementById("customColorHexTwo")?.value || document.getElementById("customColorPickerTwo")?.value, state.settings.customColorTwo || "#D7C4F2");
+    state.settings.customColorOne = first;
+    state.settings.customColorTwo = second;
+    state.settings.themePair = "custom";
+    saveState(); render(); toast("Your custom colors are on 💗");
+  }
+  else if (action === "set-wallpaper") { state.settings.wallpaper = button.dataset.id; state.settings.customWallpaperEnabled = false; saveState(); render(); toast("Wallpaper updated"); }
+  else if (action === "set-wallpaper-overlay") { state.settings.customWallpaperOverlay = button.dataset.value || "medium"; saveState(); render(); }
+  else if (action === "set-wallpaper-position") { state.settings.customWallpaperPosition = button.dataset.value || "center"; saveState(); render(); }
+  else if (action === "remove-custom-wallpaper") { state.settings.customWallpaperPhoto = ""; state.settings.customWallpaperEnabled = false; saveState(); render(); toast("Custom wallpaper removed"); }
   else if (action === "request-notifications") requestNotifications();
   else if (action === "install-app") installApp();
   else if (action === "export-data") exportData();
@@ -1283,12 +1381,55 @@ document.addEventListener("click", event => {
   else if (action === "reset-data") { if (confirm("Reset all Koi Build 1 data on this device?")) { localStorage.removeItem(STORAGE_KEY); state = clone(DEFAULT_STATE); state.onboardingComplete = false; saveState(); showOnboarding(); render(); } }
 });
 
-document.addEventListener("change", event => {
+document.addEventListener("change", async event => {
+  const wallpaperFile = event.target.closest("#customWallpaperFile");
+  if (wallpaperFile) {
+    const file = wallpaperFile.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast("Please choose an image"); return; }
+    try {
+      const compressed = await compressImage(file, 1440, 0.72);
+      state.settings.customWallpaperPhoto = compressed;
+      state.settings.customWallpaperEnabled = true;
+      saveState(); render(); toast("Custom wallpaper saved 💗");
+    } catch (error) {
+      console.warn("Could not prepare wallpaper", error);
+      toast("That photo could not be used");
+    }
+    return;
+  }
+
   const input = event.target.closest('[data-action="toggle-setting"]');
   if (!input) return;
   state.settings[input.dataset.key] = input.checked;
   saveState();
+  if (input.dataset.key === "customWallpaperEnabled") render();
   toast("Preference saved");
+});
+
+document.addEventListener("input", event => {
+  const picker = event.target.closest("[data-custom-color-picker]");
+  const hex = event.target.closest("[data-custom-color-hex]");
+  if (picker) {
+    const which = picker.dataset.customColorPicker;
+    const normalized = normalizeHexColor(picker.value, which === "one" ? "#F3B8D0" : "#D7C4F2");
+    const hexInput = document.getElementById(which === "one" ? "customColorHexOne" : "customColorHexTwo");
+    const preview = document.getElementById(which === "one" ? "customColorPreviewOne" : "customColorPreviewTwo");
+    if (hexInput) hexInput.value = normalized;
+    if (preview) preview.style.background = normalized;
+    return;
+  }
+  if (hex) {
+    const which = hex.dataset.customColorHex;
+    const raw = String(hex.value || "").trim();
+    const candidate = raw.startsWith("#") ? raw : `#${raw}`;
+    if (!/^#[0-9A-Fa-f]{6}$/.test(candidate)) return;
+    const normalized = candidate.toUpperCase();
+    const colorPicker = document.getElementById(which === "one" ? "customColorPickerOne" : "customColorPickerTwo");
+    const preview = document.getElementById(which === "one" ? "customColorPreviewOne" : "customColorPreviewTwo");
+    if (colorPicker) colorPicker.value = normalized;
+    if (preview) preview.style.background = normalized;
+  }
 });
 
 document.querySelectorAll(".nav-item").forEach(button => button.addEventListener("click", () => navigate(button.dataset.route)));
@@ -1511,6 +1652,13 @@ enableAppLikeZoomLock();
 
   function ensureFeatureState() {
     state.settings.questionPack ||= "all";
+    state.settings.customColorOne ||= "#F3B8D0";
+    state.settings.customColorTwo ||= "#D7C4F2";
+    state.settings.wallpaper ||= "petals";
+    state.settings.customWallpaperPhoto ||= "";
+    state.settings.customWallpaperEnabled = Boolean(state.settings.customWallpaperPhoto && state.settings.customWallpaperEnabled);
+    state.settings.customWallpaperOverlay ||= "medium";
+    state.settings.customWallpaperPosition ||= "center";
     state.pair.relationshipMode ||= state.pair.weddingAnniversary ? "married" : "dating";
     state.pair.datingAnniversary ||= state.pair.anniversary || "";
     state.pair.weddingAnniversary ||= "";
