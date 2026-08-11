@@ -1,4 +1,4 @@
-const CACHE_VERSION = "koi-foundation-2-v6-pair-sync";
+const CACHE_VERSION = "koi-foundation-2-v7-koi-world";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -12,6 +12,8 @@ const APP_SHELL = [
   "./services/little-things.js",
   "./services/memories.js",
   "./services/shared-state.js",
+  "./services/world.js",
+  "./features/koi-world.js",
   "./services/sync.js",
   "./services/cloud-bootstrap.js",
   "./manifest.json",

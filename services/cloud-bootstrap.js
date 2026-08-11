@@ -286,7 +286,8 @@
       sides,
       createdAt: new Date(row.created_at).getTime(),
       updatedAt: new Date(row.updated_at).getTime(),
-      syncStatus: "synced"
+      syncStatus: "synced",
+      createdByCloudId: row.created_by
     };
   }
 
@@ -320,6 +321,35 @@
 
   cloud.refreshPair = refreshPair;
 
+  async function refreshWorld({ quiet = false, notify = false } = {}) {
+    if (!cloud.runtime.ready || !cloud.world) return;
+    try {
+      const previous = Array.isArray(state.worldItems) ? state.worldItems : [];
+      const rows = await cloud.world.list();
+      state.worldItems = rows;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+      const meId = currentSession?.user?.id;
+      const newestPartnerPing = rows
+        .filter(row => row.feature_key === "thinking" && row.owner_id !== meId)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+      const hadPing = previous.some(row => row.id === newestPartnerPing?.id);
+
+      render();
+      if (notify && newestPartnerPing && !hadPing) {
+        toast("Your person is thinking of you 💗");
+        if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
+          try { new Notification("Koi 💗", { body: "Your person is thinking of you.", icon: "icon/icon-192.png" }); } catch {}
+        }
+      }
+    } catch (error) {
+      console.error("Koi World sync failed", error);
+      if (!quiet) toast(error.message || "Koi World sync paused");
+    }
+  }
+
+  cloud.refreshWorld = refreshWorld;
+
   async function connectPair(payload) {
     await mapCloudPairToLocal(payload);
     cloud.runtime.ready = true;
@@ -338,7 +368,8 @@
     await cloud.sync.flush();
     await Promise.all([
       refreshLittleThings({ quiet: true }),
-      refreshMemories({ quiet: true })
+      refreshMemories({ quiet: true }),
+      refreshWorld({ quiet: true })
     ]);
 
     await cloud.littleThings.subscribe(payload.pair.id, async () => {
@@ -349,6 +380,12 @@
     if (cloud.memories) {
       await cloud.memories.subscribe(payload.pair.id, async () => {
         await refreshMemories({ quiet: true });
+      });
+    }
+
+    if (cloud.world) {
+      await cloud.world.subscribe(payload.pair.id, async () => {
+        await refreshWorld({ quiet: true, notify: true });
       });
     }
 
@@ -534,6 +571,7 @@
     try {
       await Promise.all([
         cloud.memories?.unsubscribe?.(),
+        cloud.world?.unsubscribe?.(),
         cloud.sharedState?.unsubscribe?.(),
         cloud.pairs?.unsubscribe?.()
       ]);
@@ -752,6 +790,7 @@
     await Promise.all([
       refreshLittleThings({ quiet: true }),
       refreshMemories({ quiet: true }),
+      refreshWorld({ quiet: true }),
       cloud.sharedState?.refresh?.(),
       refreshPair({ quiet: true })
     ]);
