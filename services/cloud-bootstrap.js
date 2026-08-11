@@ -9,12 +9,33 @@
   let booting = false;
 
   const localOpenAddLittleThing = typeof openAddLittleThing === "function" ? openAddLittleThing : null;
+  const localOpenTwoSides = typeof openTwoSides === "function" ? openTwoSides : null;
   const localRenderYou = typeof renderYou === "function" ? renderYou : null;
 
   function html(value) {
     return String(value ?? "").replace(/[&<>'"]/g, char => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
     }[char]));
+  }
+
+  async function copyText(value) {
+    const text = String(value || "").trim();
+    if (!text) return false;
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand("copy");
+      area.remove();
+      return ok;
+    }
   }
 
   function ensureGate() {
@@ -170,10 +191,11 @@
       <div class="cloud-gate-brand">Koi <span>💗</span></div>
       <p class="eyebrow">YOUR KOI IS READY</p>
       <h1>Invite your person.</h1>
-      <article class="card card-duo invite-code-card">
-        <span class="micro muted">ONE-TIME PAIR CODE</span>
+      <button class="card card-duo invite-code-card invite-code-copy" type="button" data-cloud-action="copy-invite" data-code="${html(code)}" aria-label="Copy invite code">
+        <span class="micro muted">ONE-TIME PAIR CODE · TAP TO COPY</span>
         <strong>${html(code || "Open Pair menu to regenerate")}</strong>
-      </article>
+        <span class="invite-copy-hint">Copy code</span>
+      </button>
       <p class="small muted">Your partner creates their own Koi account and enters this code. The code expires automatically.</p>
       <button class="button button-primary button-block" data-cloud-action="continue-to-koi">Continue to Koi</button>
     `);
@@ -195,7 +217,10 @@
     state.profiles[1].avatar = partnerCloud?.avatar || "☁️";
 
     state.pair.pairId = payload.pair.id;
-    state.pair.anniversary = payload.pair.anniversary || state.pair.anniversary;
+    state.pair.relationshipMode = payload.pair.relationship_mode || (payload.pair.wedding_anniversary ? "married" : (state.pair.relationshipMode || "dating"));
+    state.pair.datingAnniversary = payload.pair.dating_anniversary || payload.pair.anniversary || state.pair.datingAnniversary || state.pair.anniversary;
+    state.pair.weddingAnniversary = payload.pair.wedding_anniversary || "";
+    state.pair.anniversary = state.pair.datingAnniversary || payload.pair.anniversary || state.pair.anniversary;
     state.pair.inviteCode = payload.invite?.code || "";
     state.onboardingComplete = true;
 
@@ -231,6 +256,55 @@
     }
   }
 
+  function cloudMemoryToLocal(row) {
+    const photos = (row.media || []).map(media => media.signed_url).filter(Boolean);
+    const sides = {};
+    for (const side of row.sides || []) {
+      const member = cloud.runtime.members.find(item => item.user_id === side.user_id);
+      const localId = side.user_id === currentSession?.user?.id ? "u1" : (member ? "u2" : "u2");
+      sides[localId] = {
+        text: side.side_text,
+        submittedAt: new Date(side.created_at).getTime(),
+        cloudUserId: side.user_id
+      };
+    }
+    return {
+      id: row.id,
+      cloudId: row.id,
+      type: row.memory_type === "two-sides" ? "two-sides" : "memory",
+      title: row.title,
+      date: row.happened_on || "",
+      location: row.location || "",
+      note: row.note || "",
+      chapter: row.chapter || "Little Days",
+      tags: row.tags || [],
+      eraId: row.era_id || "",
+      photo: photos[0] || "",
+      photos,
+      media: row.media || [],
+      icon: row.memory_type === "two-sides" ? "♡♡" : "💗",
+      sides,
+      createdAt: new Date(row.created_at).getTime(),
+      updatedAt: new Date(row.updated_at).getTime(),
+      syncStatus: "synced"
+    };
+  }
+
+  async function refreshMemories({ quiet = false } = {}) {
+    if (!cloud.runtime.ready || !activePairPayload?.pair?.id || !cloud.memories) return;
+    try {
+      const rows = await cloud.memories.list(activePairPayload.pair.id);
+      state.memories = rows.map(cloudMemoryToLocal);
+      saveState();
+      render();
+    } catch (error) {
+      console.error("Koi memory sync failed", error);
+      if (!quiet) toast(`Memory sync paused: ${error.message || "network error"}`);
+    }
+  }
+
+  cloud.refreshMemories = refreshMemories;
+
   async function connectPair(payload) {
     await mapCloudPairToLocal(payload);
     cloud.runtime.ready = true;
@@ -238,12 +312,21 @@
     hideGate();
 
     await cloud.sync.flush();
-    await refreshLittleThings({ quiet: true });
+    await Promise.all([
+      refreshLittleThings({ quiet: true }),
+      refreshMemories({ quiet: true })
+    ]);
 
     await cloud.littleThings.subscribe(payload.pair.id, async () => {
       await refreshLittleThings({ quiet: true });
       toast("Koi updated from your partner 💗");
     });
+
+    if (cloud.memories) {
+      await cloud.memories.subscribe(payload.pair.id, async () => {
+        await refreshMemories({ quiet: true });
+      });
+    }
 
     render();
   }
@@ -339,6 +422,35 @@
     };
   }
 
+  // Cloud-aware Two Sides reveal: partner text is only returned after both have submitted.
+  if (localOpenTwoSides) {
+    openTwoSides = async function openTwoSidesCloudAware(id) {
+      if (cloud.runtime.ready && cloud.memories) {
+        try {
+          const revealed = await cloud.memories.getRevealedSides(id);
+          if (revealed.length) {
+            const item = state.memories.find(entry => entry.id === id);
+            if (item) {
+              item.sides ||= {};
+              for (const side of revealed) {
+                const localId = side.user_id === currentSession?.user?.id ? "u1" : "u2";
+                item.sides[localId] = {
+                  text: side.side_text,
+                  submittedAt: new Date(side.created_at).getTime(),
+                  cloudUserId: side.user_id
+                };
+              }
+              saveState();
+            }
+          }
+        } catch (error) {
+          console.warn("Could not check Two Sides reveal", error);
+        }
+      }
+      return localOpenTwoSides(id);
+    };
+  }
+
   // Add production cloud status to the You screen.
   if (localRenderYou) {
     renderYou = function renderYouFoundation2() {
@@ -348,9 +460,9 @@
       const card = document.createElement("article");
       card.className = "card card-duo cloud-status-card";
       card.innerHTML = `
-        <p class="eyebrow">KOI CLOUD FOUNDATION 2.0</p>
+        <p class="eyebrow">KOI CLOUD</p>
         <h3>${html(cloudStatusText())}</h3>
-        <p class="small muted">${cloud.runtime.ready ? "Little Things are now using the shared cloud database and private realtime channel. Other Koi features remain local until they are migrated one by one." : "Cloud setup is optional until you fill in config/supabase-config.js."}</p>
+        <p class="small muted">${cloud.runtime.ready ? "Little Things and Memories now sync through your private pair. Memory photos are stored privately in Koi Cloud so they can follow you to another phone." : "Cloud setup is optional until you fill in config/supabase-config.js."}</p>
         ${cloud.runtime.ready ? `<div class="inline-actions"><button data-cloud-action="show-pair-info">Pair details</button><button data-cloud-action="sign-out">Sign out</button></div>` : ""}
       `;
       page.appendChild(card);
@@ -381,7 +493,7 @@
             ${members.map(member => `<div class="memory-item"><div class="memory-thumb">${html(member.avatar || "♡")}</div><div><h3>${html(member.display_name || "Koi user")}</h3><p>${member.user_id === currentSession?.user?.id ? "This phone" : "Partner"} · ${html(member.role || "member")}</p></div></div>`).join("")}
           </div>
         </article>
-        ${members.length < 2 && inviteCode ? `<article class="card card-lavender invite-code-card"><span class="micro muted">ACTIVE INVITE CODE</span><strong>${html(inviteCode)}</strong><p class="small muted">Share this one-time code with your partner.</p></article>` : ""}
+        ${members.length < 2 && inviteCode ? `<button class="card card-lavender invite-code-card invite-code-copy" type="button" data-cloud-action="copy-invite" data-code="${html(inviteCode)}"><span class="micro muted">ACTIVE INVITE CODE · TAP TO COPY</span><strong>${html(inviteCode)}</strong><span class="invite-copy-hint">Copy code</span></button>` : ""}
         ${members.length < 2 ? `<button class="button button-primary button-block" data-cloud-action="regenerate-invite">Generate new invite code</button>` : ""}
         <button class="button button-ghost button-block" data-cloud-action="sign-out">Sign out</button>
       `
@@ -390,6 +502,7 @@
 
   async function signOutAndReset() {
     try {
+      await cloud.memories?.unsubscribe?.();
       await cloud.auth.signOut();
     } finally {
       currentSession = null;
@@ -433,6 +546,32 @@
     }
   }, true);
 
+  // Cloud-backed memory deletion, including private Storage cleanup.
+  document.addEventListener("click", async event => {
+    if (!cloud.runtime.ready || !cloud.memories) return;
+    const button = event.target.closest('[data-action="delete-memory"]');
+    if (!button) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!confirm("Delete this memory and its photos from both phones?")) return;
+
+    const id = button.dataset.id;
+    const before = [...state.memories];
+    state.memories = state.memories.filter(item => item.id !== id);
+    saveState(); closeModal(); render();
+
+    try {
+      await cloud.memories.remove(id);
+      await refreshMemories({ quiet: true });
+      toast("Memory deleted from Koi Cloud");
+    } catch (error) {
+      state.memories = before;
+      saveState(); render();
+      toast(error.message || "Could not delete this memory");
+    }
+  }, true);
+
   // Real accounts replace the old same-device profile switcher.
   document.addEventListener("click", event => {
     if (!cloud.runtime.ready) return;
@@ -465,6 +604,12 @@
       form.querySelector('input[name="password"]').autocomplete = signUp ? "new-password" : "current-password";
       form.querySelector('button[type="submit"]').textContent = signUp ? "Create account 💗" : "Sign in 💗";
       document.querySelectorAll(".cloud-auth-tabs button").forEach(btn => btn.classList.toggle("is-active", btn === button));
+      return;
+    }
+
+    if (action === "copy-invite") {
+      const copied = await copyText(button.dataset.code || button.querySelector("strong")?.textContent || "");
+      toast(copied ? "Invite code copied 💗" : "Press and hold the code to copy");
       return;
     }
 
@@ -570,13 +715,14 @@
   window.addEventListener("online", async () => {
     if (!cloud.runtime.ready) return;
     await cloud.sync.flush();
-    await refreshLittleThings({ quiet: true });
+    await Promise.all([refreshLittleThings({ quiet: true }), refreshMemories({ quiet: true })]);
     toast("Koi is back online");
   });
 
   cloud.auth.onChange(async (event, session) => {
     currentSession = session;
     if (event === "SIGNED_OUT") {
+      await cloud.memories?.unsubscribe?.();
       activePairPayload = null;
       cloud.runtime.ready = false;
       document.documentElement.classList.remove("koi-cloud-ready");

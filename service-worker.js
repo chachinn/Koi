@@ -1,4 +1,4 @@
-const CACHE_VERSION = "koi-foundation-2-v3-onboarding-clean";
+const CACHE_VERSION = "koi-foundation-2-v4-relationship-media";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -10,6 +10,7 @@ const APP_SHELL = [
   "./services/auth.js",
   "./services/pairs.js",
   "./services/little-things.js",
+  "./services/memories.js",
   "./services/sync.js",
   "./services/cloud-bootstrap.js",
   "./manifest.json",

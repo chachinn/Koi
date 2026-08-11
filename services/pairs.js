@@ -40,6 +40,34 @@
       const data = await rpc("regenerate_pair_invite");
       cloud.runtime.pair = data?.pair || cloud.runtime.pair;
       return data;
+    },
+
+    async updateRelationship({ relationshipMode = "dating", datingAnniversary = null, weddingAnniversary = null } = {}) {
+      const data = await rpc("update_koi_relationship_settings", {
+        p_relationship_mode: relationshipMode || "dating",
+        p_dating_anniversary: datingAnniversary || null,
+        p_wedding_anniversary: relationshipMode === "married" ? (weddingAnniversary || null) : null
+      });
+      cloud.runtime.pair = data?.pair || cloud.runtime.pair;
+      cloud.runtime.members = data?.members || cloud.runtime.members;
+      return data;
+    },
+
+    async updateMyProfile({ displayName = "", avatar = "" } = {}) {
+      const userId = cloud.runtime.session?.user?.id;
+      if (!userId) throw new Error("Your Koi session expired. Sign in again.");
+      const payload = {};
+      if (String(displayName || "").trim()) payload.display_name = String(displayName).trim();
+      if (String(avatar || "").trim()) payload.avatar = String(avatar).trim();
+      if (!Object.keys(payload).length) return null;
+      const { data, error } = await cloud.client
+        .from("profiles")
+        .update(payload)
+        .eq("id", userId)
+        .select("id,display_name,avatar")
+        .single();
+      if (error) throw error;
+      return data;
     }
   };
 })();

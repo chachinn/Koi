@@ -1084,3 +1084,97 @@ input[type="range"] { accent-color: var(--pink-deep); width: 100%; }
     font-size: 13px;
   }
 }
+
+/* =========================================================
+   KOI 2.1 — relationship dates, copyable invite, cloud photos
+   ========================================================= */
+
+.compact-date-picker {
+  display: grid;
+  grid-template-columns: 1.18fr .72fr .95fr;
+  gap: 7px;
+}
+.compact-date-picker select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 7px;
+  border-radius: 13px;
+  font-size: 14px;
+  background: rgba(255,255,255,.96);
+}
+
+.relationship-dates-card { margin-top: 12px; }
+.relationship-date-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.relationship-date-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,.7);
+}
+.relationship-date-list span { color: var(--ink-muted); font-size: 12px; }
+.relationship-date-list strong { text-align: right; font-size: 13px; }
+
+.invite-code-copy {
+  width: 100%;
+  color: inherit;
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--lavender) 55%, white);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.invite-code-copy:active { transform: scale(.985); }
+.invite-copy-hint {
+  display: inline-block;
+  margin-top: 9px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.72);
+  color: var(--lavender-deep);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.memory-photo-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.memory-photo-gallery img {
+  width: 100%;
+  height: min(var(--memory-photo-max, 280px), 38vw);
+  min-height: 135px;
+  object-fit: cover;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--pink) 32%, white);
+  box-shadow: 0 7px 18px rgba(107,74,106,.08);
+}
+.memory-photo-gallery img:only-child {
+  grid-column: 1 / -1;
+  height: min(var(--memory-photo-max, 280px), 66vw);
+}
+
+@media (max-width: 370px) {
+  .compact-date-picker {
+    grid-template-columns: 1.1fr .68fr .9fr;
+    gap: 5px;
+  }
+  .compact-date-picker select {
+    padding-inline: 5px;
+    font-size: 13px;
+  }
+  .relationship-date-list > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .relationship-date-list strong { text-align: left; }
+}

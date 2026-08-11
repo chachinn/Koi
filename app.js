@@ -28,7 +28,7 @@
 */
 
 const STORAGE_KEY = "koi_build1_state_v1";
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 3;
 
 const QUESTION_BANK = [
   { id: "q01", category: "Sweet", text: "What’s one small thing I did recently that made you feel loved?" },
@@ -100,6 +100,68 @@ function daysBetween(startValue, end = new Date()) {
   return Math.max(0, Math.floor((end - start) / 86400000));
 }
 
+function dateParts(value = "") {
+  const [year = "", month = "", day = ""] = String(value || "").split("-");
+  return { year, month, day };
+}
+
+function compactDatePickerHTML(prefix, value = "", { required = false } = {}) {
+  const selected = dateParts(value);
+  const now = new Date();
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const monthOptions = months.map((label, index) => {
+    const val = String(index + 1).padStart(2, "0");
+    return `<option value="${val}" ${selected.month === val ? "selected" : ""}>${label}</option>`;
+  }).join("");
+  const dayOptions = Array.from({ length: 31 }, (_, index) => {
+    const val = String(index + 1).padStart(2, "0");
+    return `<option value="${val}" ${selected.day === val ? "selected" : ""}>${index + 1}</option>`;
+  }).join("");
+  const yearOptions = Array.from({ length: 101 }, (_, index) => now.getFullYear() - index)
+    .map(year => `<option value="${year}" ${selected.year === String(year) ? "selected" : ""}>${year}</option>`).join("");
+  const req = required ? "required" : "";
+  return `<div class="compact-date-picker" data-date-picker="${prefix}">
+    <select id="${prefix}Month" name="${prefix}Month" aria-label="Month" ${req}><option value="">Month</option>${monthOptions}</select>
+    <select id="${prefix}Day" name="${prefix}Day" aria-label="Day" ${req}><option value="">Day</option>${dayOptions}</select>
+    <select id="${prefix}Year" name="${prefix}Year" aria-label="Year" ${req}><option value="">Year</option>${yearOptions}</select>
+  </div>`;
+}
+
+function readCompactDate(source, prefix, { required = false, futureAllowed = false } = {}) {
+  const get = name => {
+    if (source instanceof FormData) return String(source.get(name) || "");
+    return String(document.getElementById(name)?.value || "");
+  };
+  const month = get(`${prefix}Month`);
+  const day = get(`${prefix}Day`);
+  const year = get(`${prefix}Year`);
+  if (!month && !day && !year && !required) return "";
+  if (!month || !day || !year) throw new Error("Choose the month, day, and year.");
+  const iso = `${year}-${month}-${day}`;
+  const candidate = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(candidate.getTime()) || candidate.getFullYear() !== Number(year) || candidate.getMonth() + 1 !== Number(month) || candidate.getDate() !== Number(day)) {
+    throw new Error("That date is not valid.");
+  }
+  if (!futureAllowed && candidate > new Date()) throw new Error("That date can't be in the future.");
+  return iso;
+}
+
+function memoryPhotos(item = {}) {
+  const photos = Array.isArray(item.photos) ? item.photos.filter(Boolean) : [];
+  if (!photos.length && item.photo) photos.push(item.photo);
+  return photos;
+}
+
+function primaryMemoryPhoto(item = {}) {
+  return memoryPhotos(item)[0] || "";
+}
+
+function memoryPhotoGallery(item = {}, { maxHeight = 280 } = {}) {
+  const photos = memoryPhotos(item);
+  if (!photos.length) return `<div class="frame" style="margin-bottom:12px">${escapeHTML(item.icon || "💗")}</div>`;
+  return `<div class="memory-photo-gallery" style="--memory-photo-max:${maxHeight}px">${photos.map((src, index) => `<img src="${escapeHTML(src)}" alt="Memory photo ${index + 1}" loading="lazy">`).join("")}</div>`;
+}
+
 function hashString(text) {
   let hash = 0;
   for (let i = 0; i < text.length; i += 1) hash = ((hash << 5) - hash) + text.charCodeAt(i);
@@ -117,6 +179,9 @@ const DEFAULT_STATE = {
   pair: {
     pairId: "pair_local_demo",
     anniversary: "2023-03-12",
+    relationshipMode: "dating",
+    datingAnniversary: "2023-03-12",
+    weddingAnniversary: "",
     inviteCode: "KOI-LOVE",
     currentEra: "Golden Everyday Era",
     comfortFood: "Ramen",
@@ -467,7 +532,10 @@ function greeting() {
 }
 
 function renderUs() {
-  const days = daysBetween(state.pair.anniversary);
+  const datingAnniversary = state.pair.datingAnniversary || state.pair.anniversary;
+  const weddingAnniversary = state.pair.weddingAnniversary || "";
+  const marriedMode = state.pair.relationshipMode === "married";
+  const days = daysBetween(datingAnniversary);
   const me = currentProfile();
   const partner = partnerProfile();
   const completedDates = state.dateIdeas.filter(item => item.completed).length;
@@ -495,6 +563,14 @@ function renderUs() {
           <div class="stat-card"><strong>${days}</strong><span>Days together</span></div>
           <div class="stat-card"><strong>${completedDates}</strong><span>Dates completed</span></div>
           <div class="stat-card"><strong>${state.memories.length}</strong><span>Memories</span></div>
+        </div>
+      </article>
+
+      <article class="card card-duo relationship-dates-card">
+        <div class="section-heading" style="margin:0"><div><p class="eyebrow">OUR ANNIVERSARIES</p><h2>${marriedMode ? "Married mode 💍" : "Dating mode 💗"}</h2></div><button data-action="edit-us">Edit</button></div>
+        <div class="relationship-date-list">
+          <div><span>Dating / together since</span><strong>${escapeHTML(formatDate(datingAnniversary))}</strong></div>
+          ${marriedMode ? `<div><span>Wedding anniversary</span><strong>${escapeHTML(formatDate(weddingAnniversary))}</strong></div>` : ""}
         </div>
       </article>
 
@@ -590,7 +666,8 @@ function renderMemoryList() {
 }
 
 function memoryRow(item, action) {
-  return `<button class="memory-item" data-action="${action}" data-id="${item.id}" style="width:100%;text-align:left;color:inherit"><div class="memory-thumb">${item.photo ? `<img src="${item.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:15px">` : escapeHTML(item.icon || "💗")}</div><div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(formatDate(item.date))}${item.location ? ` · ${escapeHTML(item.location)}` : ""}</p><div class="tags" style="margin-top:6px">${(item.tags || []).slice(0, 2).map(tag => `<span class="tag">${escapeHTML(tag)}</span>`).join("")}</div></div><span>›</span></button>`;
+  const cover = primaryMemoryPhoto(item);
+  return `<button class="memory-item" data-action="${action}" data-id="${item.id}" style="width:100%;text-align:left;color:inherit"><div class="memory-thumb">${cover ? `<img src="${cover}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:15px">` : escapeHTML(item.icon || "💗")}</div><div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(formatDate(item.date))}${item.location ? ` · ${escapeHTML(item.location)}` : ""}</p><div class="tags" style="margin-top:6px">${(item.tags || []).slice(0, 2).map(tag => `<span class="tag">${escapeHTML(tag)}</span>`).join("")}</div></div><span>›</span></button>`;
 }
 
 function renderTwoSidesList() {
@@ -856,20 +933,56 @@ function openNotifications() {
 }
 
 function openEditUs() {
+  const relationshipMode = state.pair.relationshipMode || (state.pair.weddingAnniversary ? "married" : "dating");
+  const datingAnniversary = state.pair.datingAnniversary || state.pair.anniversary || "";
+  const weddingAnniversary = state.pair.weddingAnniversary || "";
   openModal({ eyebrow: "OUR DETAILS", title: "Edit our little us", html: `
     <form id="editUsForm" class="form-grid">
-      <div class="field"><label>Anniversary / start date</label><input name="anniversary" type="date" value="${escapeHTML(state.pair.anniversary)}"></div>
+      <div class="field"><label>Relationship mode</label><select name="relationshipMode" id="editRelationshipMode"><option value="dating" ${relationshipMode === "dating" ? "selected" : ""}>Dating</option><option value="married" ${relationshipMode === "married" ? "selected" : ""}>Married 💍</option></select></div>
+      <div class="field"><label>Dating anniversary / together since</label>${compactDatePickerHTML("editDating", datingAnniversary, { required: true })}</div>
+      <div class="field" id="editWeddingWrap" ${relationshipMode === "married" ? "" : "hidden"}><label>Wedding anniversary</label>${compactDatePickerHTML("editWedding", weddingAnniversary, { required: false })}</div>
       <div class="field"><label>Current era</label><input name="currentEra" value="${escapeHTML(state.pair.currentEra)}" maxlength="80"></div>
       <div class="two-grid"><div class="field"><label>Comfort food</label><input name="comfortFood" value="${escapeHTML(state.pair.comfortFood)}"></div><div class="field"><label>Our song</label><input name="song" value="${escapeHTML(state.pair.song)}"></div></div>
       <div class="field"><label>Next date</label><input name="nextDate" type="date" value="${escapeHTML(state.pair.nextDate)}"></div>
       <div class="field"><label>Next date label</label><input name="nextDateLabel" value="${escapeHTML(state.pair.nextDateLabel)}"></div>
       <button class="button button-primary" type="submit">Save</button>
     </form>` });
-  document.getElementById("editUsForm").addEventListener("submit", event => {
+
+  const modeSelect = document.getElementById("editRelationshipMode");
+  const weddingWrap = document.getElementById("editWeddingWrap");
+  modeSelect?.addEventListener("change", () => { weddingWrap.hidden = modeSelect.value !== "married"; });
+
+  document.getElementById("editUsForm").addEventListener("submit", async event => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    ["anniversary", "currentEra", "comfortFood", "song", "nextDate", "nextDateLabel"].forEach(key => state.pair[key] = String(form.get(key) || "").trim());
-    saveState(); closeModal(); render(); toast("Our details updated");
+    try {
+      const mode = String(form.get("relationshipMode") || "dating");
+      const dating = readCompactDate(form, "editDating", { required: true });
+      const wedding = mode === "married" ? readCompactDate(form, "editWedding", { required: true }) : "";
+      state.pair.relationshipMode = mode;
+      state.pair.datingAnniversary = dating;
+      state.pair.weddingAnniversary = wedding;
+      state.pair.anniversary = dating;
+      ["currentEra", "comfortFood", "song", "nextDate", "nextDateLabel"].forEach(key => state.pair[key] = String(form.get(key) || "").trim());
+
+      if (window.KoiCloud?.runtime?.ready && window.KoiCloud?.pairs?.updateRelationship) {
+        const payload = await window.KoiCloud.pairs.updateRelationship({
+          relationshipMode: mode,
+          datingAnniversary: dating,
+          weddingAnniversary: wedding || null
+        });
+        if (payload?.pair) {
+          state.pair.relationshipMode = payload.pair.relationship_mode || mode;
+          state.pair.datingAnniversary = payload.pair.dating_anniversary || dating;
+          state.pair.weddingAnniversary = payload.pair.wedding_anniversary || "";
+          state.pair.anniversary = state.pair.datingAnniversary;
+        }
+      }
+
+      saveState(); closeModal(); render(); toast("Our details updated 💗");
+    } catch (error) {
+      toast(error.message || "Could not save our details");
+    }
   });
 }
 
@@ -945,7 +1058,7 @@ function openMemoryDetail(id) {
   const item = state.memories.find(entry => entry.id === id);
   if (!item) return;
   openModal({ eyebrow: "MEMORY", title: item.title, html: `
-    ${item.photo ? `<img src="${item.photo}" alt="" style="width:100%;max-height:280px;object-fit:cover;border-radius:20px;margin-bottom:12px">` : `<div class="frame" style="margin-bottom:12px">${escapeHTML(item.icon || "💗")}</div>`}
+    ${memoryPhotoGallery(item, { maxHeight: 280 })}
     <p class="small muted">${escapeHTML(formatDate(item.date))}${item.location ? ` · ${escapeHTML(item.location)}` : ""}</p>
     <p style="line-height:1.6">${escapeHTML(item.note || "No note yet.")}</p>
     <div class="tags">${(item.tags || []).map(tag => `<span class="tag">${escapeHTML(tag)}</span>`).join("")}</div>
@@ -969,7 +1082,7 @@ function openTwoSides(id) {
   const theirs = item.sides[partner.id];
   const reveal = Boolean(mine?.text && theirs?.text);
   openModal({ eyebrow: "SAME MOMENT, TWO SIDES", title: item.title, html: `
-    ${item.photo ? `<img src="${item.photo}" alt="" style="width:100%;max-height:260px;object-fit:cover;border-radius:20px;margin-bottom:12px">` : `<div class="frame" style="margin-bottom:12px">${escapeHTML(item.icon || "♡♡")}</div>`}
+    ${memoryPhotoGallery({ ...item, icon: item.icon || "♡♡" }, { maxHeight: 260 })}
     <p class="small muted">${escapeHTML(formatDate(item.date))}${item.location ? ` · ${escapeHTML(item.location)}` : ""}</p>
     ${reveal ? `<div class="answer-grid">${answerCard(me, mine, "is-you")}${answerCard(partner, theirs, "is-partner")}</div>` : `<div class="answer-grid"><div class="answer-card ${mine ? "is-you" : "is-locked"}">${mine ? `<strong>${escapeHTML(me.displayName)}</strong><p>Your side is safely tucked away until both submit.</p>` : `<div><div class="lock-icon">♡</div><p>You haven’t written your side yet.</p></div>`}</div><div class="answer-card is-locked"><div><div class="lock-icon">♡</div><p>${theirs ? `${escapeHTML(partner.displayName)} submitted privately.` : `${escapeHTML(partner.displayName)} hasn’t submitted yet.`}</p></div></div></div>`}
     <div class="button-row" style="margin-top:14px"><button class="button button-primary" data-action="edit-two-side" data-id="${item.id}">${mine ? "Edit my side" : "Add my side"}</button><button class="button button-secondary" data-action="edit-memory" data-id="${item.id}">Edit memory</button></div>` });
@@ -1209,7 +1322,10 @@ function showOnboarding() {
   runtime.onboardingDraft = {
     myName: state.profiles[0].displayName === "You" ? "" : state.profiles[0].displayName,
     partnerName: state.profiles[1].displayName === "Love" ? "" : state.profiles[1].displayName,
-    anniversary: state.pair.anniversary || "",
+    anniversary: state.pair.datingAnniversary || state.pair.anniversary || "",
+    relationshipMode: state.pair.relationshipMode || "dating",
+    datingAnniversary: state.pair.datingAnniversary || state.pair.anniversary || "",
+    weddingAnniversary: state.pair.weddingAnniversary || "",
     myAvatar: state.profiles[0].avatar || "🌷",
     partnerAvatar: state.profiles[1].avatar || "☁️"
   };
@@ -1226,9 +1342,13 @@ function renderOnboardingStep() {
   if (step === 0) {
     onboardingStepEl.innerHTML = `<article class="card card-duo"><p class="eyebrow">A PRIVATE SPACE FOR TWO</p><h2>Keep the tiny things.</h2><p class="small muted">Daily questions, two-sided memories, relationship lore, your museum, your room, your date jar — all in one soft little place.</p></article>`;
   } else if (step === 1) {
-    onboardingStepEl.innerHTML = `<div class="form-grid"><div class="two-grid"><div class="field"><label>Your emoji</label><input id="obMyAvatar" maxlength="4" value="${escapeHTML(runtime.onboardingDraft.myAvatar)}"></div><div class="field"><label>Your name</label><input id="obMyName" maxlength="40" value="${escapeHTML(runtime.onboardingDraft.myName)}" placeholder="Your name"></div></div><div class="two-grid"><div class="field"><label>Their emoji</label><input id="obPartnerAvatar" maxlength="4" value="${escapeHTML(runtime.onboardingDraft.partnerAvatar)}"></div><div class="field"><label>Their name</label><input id="obPartnerName" maxlength="40" value="${escapeHTML(runtime.onboardingDraft.partnerName)}" placeholder="Partner name"></div></div><div class="field"><label>Your anniversary / relationship start date</label><input id="obAnniversary" type="date" value="${escapeHTML(runtime.onboardingDraft.anniversary)}"></div></div>`;
+    const mode = runtime.onboardingDraft.relationshipMode || "dating";
+    onboardingStepEl.innerHTML = `<div class="form-grid"><div class="two-grid"><div class="field"><label>Your emoji</label><input id="obMyAvatar" maxlength="4" value="${escapeHTML(runtime.onboardingDraft.myAvatar)}"></div><div class="field"><label>Your name</label><input id="obMyName" maxlength="40" value="${escapeHTML(runtime.onboardingDraft.myName)}" placeholder="Your name"></div></div><div class="two-grid"><div class="field"><label>Their emoji</label><input id="obPartnerAvatar" maxlength="4" value="${escapeHTML(runtime.onboardingDraft.partnerAvatar)}"></div><div class="field"><label>Their name</label><input id="obPartnerName" maxlength="40" value="${escapeHTML(runtime.onboardingDraft.partnerName)}" placeholder="Partner name"></div></div><div class="field"><label>Relationship mode</label><select id="obRelationshipMode"><option value="dating" ${mode === "dating" ? "selected" : ""}>Dating</option><option value="married" ${mode === "married" ? "selected" : ""}>Married 💍</option></select></div><div class="field"><label>Dating anniversary / together since</label>${compactDatePickerHTML("obDating", runtime.onboardingDraft.datingAnniversary || runtime.onboardingDraft.anniversary, { required: true })}</div><div class="field" id="obWeddingWrap" ${mode === "married" ? "" : "hidden"}><label>Wedding anniversary</label>${compactDatePickerHTML("obWedding", runtime.onboardingDraft.weddingAnniversary || "")}</div></div>`;
+    const obMode = document.getElementById("obRelationshipMode");
+    const obWedding = document.getElementById("obWeddingWrap");
+    obMode?.addEventListener("change", () => { obWedding.hidden = obMode.value !== "married"; });
   } else {
-    onboardingStepEl.innerHTML = `<article class="card card-lavender"><p class="eyebrow">BUILD 1 NOTE</p><h2>Both people can be tested on this device.</h2><p class="small muted">Use the profile switch inside the <strong>Us</strong> tab to act as either partner. That lets you test locked answers and Two Sides before real cloud sync is connected.</p></article><article class="card card-pink"><p class="small">Your data stays in this browser’s local storage for now. Use <strong>You → Export my Koi data</strong> for backups.</p></article>`;
+    onboardingStepEl.innerHTML = `<article class="card card-lavender"><p class="eyebrow">ALMOST HOME</p><h2>Your little space is ready.</h2><p class="small muted">You can change names, anniversaries, themes and other details anytime inside Koi.</p></article>`;
   }
 }
 
@@ -1238,21 +1358,46 @@ function collectOnboardingStep() {
   runtime.onboardingDraft.partnerName = document.getElementById("obPartnerName").value.trim();
   runtime.onboardingDraft.myAvatar = document.getElementById("obMyAvatar").value.trim() || "🌷";
   runtime.onboardingDraft.partnerAvatar = document.getElementById("obPartnerAvatar").value.trim() || "☁️";
-  runtime.onboardingDraft.anniversary = document.getElementById("obAnniversary").value;
+  runtime.onboardingDraft.relationshipMode = document.getElementById("obRelationshipMode")?.value || "dating";
+  try {
+    runtime.onboardingDraft.datingAnniversary = readCompactDate(document, "obDating", { required: true });
+    runtime.onboardingDraft.weddingAnniversary = runtime.onboardingDraft.relationshipMode === "married" ? readCompactDate(document, "obWedding", { required: true }) : "";
+    runtime.onboardingDraft.anniversary = runtime.onboardingDraft.datingAnniversary;
+  } catch (error) {
+    toast(error.message || "Choose your anniversary date");
+    return false;
+  }
   if (!runtime.onboardingDraft.myName || !runtime.onboardingDraft.partnerName) { toast("Add both names first"); return false; }
   return true;
 }
 
-onboardingNextBtn.addEventListener("click", () => {
+onboardingNextBtn.addEventListener("click", async () => {
   if (!collectOnboardingStep()) return;
   if (runtime.onboardingStep < 2) { runtime.onboardingStep += 1; renderOnboardingStep(); return; }
   state.profiles[0].displayName = runtime.onboardingDraft.myName || "You";
   state.profiles[0].avatar = runtime.onboardingDraft.myAvatar || "🌷";
   state.profiles[1].displayName = runtime.onboardingDraft.partnerName || "Love";
   state.profiles[1].avatar = runtime.onboardingDraft.partnerAvatar || "☁️";
-  state.pair.anniversary = runtime.onboardingDraft.anniversary || todayKey();
-  state.pair.inviteCode = `KOI-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+  state.pair.relationshipMode = runtime.onboardingDraft.relationshipMode || "dating";
+  state.pair.datingAnniversary = runtime.onboardingDraft.datingAnniversary || runtime.onboardingDraft.anniversary || todayKey();
+  state.pair.weddingAnniversary = state.pair.relationshipMode === "married" ? (runtime.onboardingDraft.weddingAnniversary || "") : "";
+  state.pair.anniversary = state.pair.datingAnniversary;
+  state.pair.inviteCode = state.pair.inviteCode || `KOI-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
   state.onboardingComplete = true;
+
+  try {
+    if (window.KoiCloud?.runtime?.ready) {
+      await window.KoiCloud.pairs?.updateMyProfile?.({ displayName: state.profiles[0].displayName, avatar: state.profiles[0].avatar });
+      await window.KoiCloud.pairs?.updateRelationship?.({
+        relationshipMode: state.pair.relationshipMode,
+        datingAnniversary: state.pair.datingAnniversary,
+        weddingAnniversary: state.pair.weddingAnniversary || null
+      });
+    }
+  } catch (error) {
+    console.warn("Koi cloud profile/settings sync will retry later", error);
+  }
+
   saveState();
   onboarding.hidden = true;
   render();
@@ -1366,6 +1511,10 @@ enableAppLikeZoomLock();
 
   function ensureFeatureState() {
     state.settings.questionPack ||= "all";
+    state.pair.relationshipMode ||= state.pair.weddingAnniversary ? "married" : "dating";
+    state.pair.datingAnniversary ||= state.pair.anniversary || "";
+    state.pair.weddingAnniversary ||= "";
+    state.pair.anniversary = state.pair.datingAnniversary || state.pair.anniversary;
     state.customQuestions ||= [];
     state.littleThings ||= [];
     state.dateCompletions ||= [];
@@ -1409,7 +1558,7 @@ enableAppLikeZoomLock();
     state.canon = (state.canon || []).map(item => ({ challenge: null, ...item }));
     state.traditions = (state.traditions || []).map(item => ({ source: "manual", ...item }));
     state.thenNow = (state.thenNow || []).map(item => ({ revisitDate: "", ...item }));
-    state.memories = (state.memories || []).map(item => ({ eraId: "", ...item }));
+    state.memories = (state.memories || []).map(item => ({ eraId: "", photos: item.photos || (item.photo ? [item.photo] : []), ...item }));
 
     if (!runtime.dateFilters) runtime.dateFilters = { category: "All", budget: "All", setting: "All" };
     if (!runtime.loreFilter) runtime.loreFilter = "All";
@@ -1864,16 +2013,73 @@ enableAppLikeZoomLock();
 
   memoryFormHTML = function memoryFormHTMLBuild12(item = {}, { twoSides = false } = {}) {
     const selectedEra=item.eraId || activeEra()?.id || "";
-    return `<form id="memoryForm" class="form-grid"><div class="field"><label>Title</label><input name="title" required maxlength="100" value="${escapeHTML(item.title||"")}" placeholder="Coffee date"></div><div class="two-grid"><div class="field"><label>Date</label><input name="date" type="date" value="${escapeHTML(item.date||todayKey())}"></div><div class="field"><label>Location</label><input name="location" maxlength="120" value="${escapeHTML(item.location||"")}" placeholder="Optional"></div></div><div class="field"><label>${twoSides?"Shared context":"Note"}</label><textarea name="note" maxlength="900">${escapeHTML(item.note||"")}</textarea></div><div class="two-grid"><div class="field"><label>Era</label><select name="eraId"><option value="">Auto by date</option>${state.eras.map(era=>`<option value="${era.id}" ${selectedEra===era.id?"selected":""}>${escapeHTML(era.emoji)} ${escapeHTML(era.title)}</option>`).join("")}</select></div><div class="field"><label>Chapter / shelf</label><input name="chapter" maxlength="60" value="${escapeHTML(item.chapter||"Little Days")}"></div></div><div class="field"><label>Tags</label><input name="tags" value="${escapeHTML((item.tags||[]).join(", "))}"></div><div class="field"><label>Photo (optional, compressed locally)</label><input name="photo" type="file" accept="image/*"></div>${twoSides?`<div class="field"><label>Your private side</label><textarea name="side" required maxlength="900">${escapeHTML(item.sides?.[state.currentUserId]?.text||"")}</textarea></div>`:""}<button class="button button-primary" type="submit">Save ${twoSides?"my side":"memory"}</button></form>`;
+    return `<form id="memoryForm" class="form-grid"><div class="field"><label>Title</label><input name="title" required maxlength="100" value="${escapeHTML(item.title||"")}" placeholder="Coffee date"></div><div class="two-grid"><div class="field"><label>Date</label><input name="date" type="date" value="${escapeHTML(item.date||todayKey())}"></div><div class="field"><label>Location</label><input name="location" maxlength="120" value="${escapeHTML(item.location||"")}" placeholder="Optional"></div></div><div class="field"><label>${twoSides?"Shared context":"Note"}</label><textarea name="note" maxlength="900">${escapeHTML(item.note||"")}</textarea></div><div class="two-grid"><div class="field"><label>Era</label><select name="eraId"><option value="">Auto by date</option>${state.eras.map(era=>`<option value="${era.id}" ${selectedEra===era.id?"selected":""}>${escapeHTML(era.emoji)} ${escapeHTML(era.title)}</option>`).join("")}</select></div><div class="field"><label>Chapter / shelf</label><input name="chapter" maxlength="60" value="${escapeHTML(item.chapter||"Little Days")}"></div></div><div class="field"><label>Tags</label><input name="tags" value="${escapeHTML((item.tags||[]).join(", "))}"></div><div class="field"><label>Photos</label><input name="photos" type="file" accept="image/*" multiple><small>${memoryPhotos(item).length ? `${memoryPhotos(item).length} saved photo${memoryPhotos(item).length === 1 ? "" : "s"}. Select more to add them.` : "Select one or multiple photos. In Koi Cloud, compressed private copies sync to both phones."}</small></div>${twoSides?`<div class="field"><label>Your private side</label><textarea name="side" required maxlength="900">${escapeHTML(item.sides?.[state.currentUserId]?.text||"")}</textarea></div>`:""}<button class="button button-primary" type="submit">Save ${twoSides?"my side":"memory"}</button></form>`;
   };
 
   bindMemoryForm = function bindMemoryFormBuild12({ type, existingId = "" }) {
     document.getElementById("memoryForm").addEventListener("submit", async event => {
-      event.preventDefault(); const form=event.currentTarget; const data=new FormData(form); const file=form.elements.photo?.files?.[0]; let photo=existingId?state.memories.find(item=>item.id===existingId)?.photo||"":""; if(file){try{photo=await compressImage(file);}catch{toast("Photo could not be processed");}}
-      const tags=String(data.get("tags")||"").split(",").map(value=>value.trim()).filter(Boolean).slice(0,8); const payload={title:String(data.get("title")||"").trim(),date:String(data.get("date")||""),location:String(data.get("location")||"").trim(),note:String(data.get("note")||"").trim(),chapter:String(data.get("chapter")||"Little Days").trim(),eraId:String(data.get("eraId")||""),tags,photo};
-      if(existingId){const item=state.memories.find(entry=>entry.id===existingId);if(!item)return;Object.assign(item,payload);if(type==="two-sides"){item.sides ||= {};item.sides[state.currentUserId]={text:String(data.get("side")||"").trim(),submittedAt:Date.now()};}}
-      else {const item={id:uid("m"),type,...payload,icon:type==="two-sides"?"♡♡":"💗",createdAt:Date.now()};if(type==="two-sides")item.sides={[state.currentUserId]:{text:String(data.get("side")||"").trim(),submittedAt:Date.now()}};state.memories.unshift(item);}
-      saveState();closeModal();runtime.memoryTab=type==="two-sides"?"two-sides":"memories";navigate("memories");toast(type==="two-sides"?"Your side was saved privately":"Memory added to Our Museum");
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = new FormData(form);
+      const files = Array.from(form.elements.photos?.files || []);
+      const tags = String(data.get("tags") || "").split(",").map(value => value.trim()).filter(Boolean).slice(0, 8);
+      const payload = {
+        type,
+        title: String(data.get("title") || "").trim(),
+        date: String(data.get("date") || ""),
+        location: String(data.get("location") || "").trim(),
+        note: String(data.get("note") || "").trim(),
+        chapter: String(data.get("chapter") || "Little Days").trim(),
+        eraId: String(data.get("eraId") || ""),
+        tags,
+        sideText: type === "two-sides" ? String(data.get("side") || "").trim() : ""
+      };
+
+      const cloudMemories = window.KoiCloud?.runtime?.ready && window.KoiCloud?.memories;
+      if (cloudMemories) {
+        const submitButton = form.querySelector('button[type="submit"]');
+        const oldText = submitButton?.textContent;
+        if (submitButton) { submitButton.disabled = true; submitButton.textContent = files.length ? "Saving photos…" : "Saving…"; }
+        try {
+          if (existingId) await window.KoiCloud.memories.update(window.KoiCloud.runtime.pair.id, existingId, payload, files);
+          else await window.KoiCloud.memories.create(window.KoiCloud.runtime.pair.id, payload, files);
+          closeModal();
+          await window.KoiCloud.refreshMemories?.({ quiet: true });
+          runtime.memoryTab = type === "two-sides" ? "two-sides" : "memories";
+          navigate("memories");
+          toast(files.length ? `Saved ${files.length} photo${files.length === 1 ? "" : "s"} to Koi Cloud 💗` : (type === "two-sides" ? "Your side was saved privately" : "Memory saved to both phones 💗"));
+          return;
+        } catch (error) {
+          if (submitButton) { submitButton.disabled = false; submitButton.textContent = oldText || "Save"; }
+          toast(error.message || "Could not save this memory");
+          return;
+        }
+      }
+
+      // Local-only fallback: keep one compressed cover photo so old offline demo mode still works.
+      const firstFile = files[0];
+      let photo = existingId ? state.memories.find(item => item.id === existingId)?.photo || "" : "";
+      if (firstFile) {
+        try { photo = await compressImage(firstFile); }
+        catch { toast("Photo could not be processed"); }
+      }
+      const localPayload = { ...payload, photo, photos: photo ? [photo] : [] };
+      delete localPayload.sideText;
+      if (existingId) {
+        const item = state.memories.find(entry => entry.id === existingId);
+        if (!item) return;
+        Object.assign(item, localPayload);
+        if (type === "two-sides") {
+          item.sides ||= {};
+          item.sides[state.currentUserId] = { text: payload.sideText, submittedAt: Date.now() };
+        }
+      } else {
+        const item = { id: uid("m"), ...localPayload, type, icon: type === "two-sides" ? "♡♡" : "💗", createdAt: Date.now() };
+        if (type === "two-sides") item.sides = { [state.currentUserId]: { text: payload.sideText, submittedAt: Date.now() } };
+        state.memories.unshift(item);
+      }
+      saveState(); closeModal(); runtime.memoryTab = type === "two-sides" ? "two-sides" : "memories"; navigate("memories");
+      toast(type === "two-sides" ? "Your side was saved privately" : "Memory added to Our Museum");
     });
   };
 
@@ -1882,7 +2088,7 @@ enableAppLikeZoomLock();
   renderMuseum = function renderMuseumBuild12() {
     const filter=runtime.museumKindFilter || "All";
     const exhibits=[];
-    state.memories.forEach(item=>exhibits.push({kind:"memory",id:item.id,title:item.title,date:item.date,eraId:item.eraId,chapter:item.chapter,photo:item.photo,icon:item.icon||"💗",subtitle:item.type==="two-sides"?"Same Moment, Two Sides":item.location||item.chapter||"Memory"}));
+    state.memories.forEach(item=>exhibits.push({kind:"memory",id:item.id,title:item.title,date:item.date,eraId:item.eraId,chapter:item.chapter,photo:primaryMemoryPhoto(item),icon:item.icon||"💗",subtitle:item.type==="two-sides"?"Same Moment, Two Sides":item.location||item.chapter||"Memory"}));
     state.lore.forEach(item=>exhibits.push({kind:"lore",id:item.id,title:item.title,date:item.dateEstablished,eraId:item.eraId,chapter:"The Lore Book",photo:item.photo,icon:item.icon||"📖",subtitle:"Relationship Lore"}));
     state.littleThings.forEach(item=>exhibits.push({kind:"little",id:item.id,title:item.text,date:item.date,eraId:"",chapter:"Little Things",photo:"",icon:"💗",subtitle:`Little Thing · ${item.category||"Everyday"}`}));
     const visible=filter==="All"?exhibits:exhibits.filter(item=>filter==="Memories"?item.kind==="memory":filter==="Lore"?item.kind==="lore":item.kind==="little");
