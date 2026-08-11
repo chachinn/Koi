@@ -265,6 +265,7 @@
   async function mapCloudPairToLocal(payload) {
     if (!payload?.pair || !currentSession?.user) return;
     activePairPayload = payload;
+    cloud.runtime.session = currentSession || cloud.runtime.session || null;
     cloud.runtime.pair = payload.pair;
     cloud.runtime.members = payload.members || [];
 
@@ -441,6 +442,11 @@
       refreshWorld({ quiet: true })
     ]);
 
+    if (cloud.chat) {
+      try { await cloud.chat.start(payload.pair.id); }
+      catch (error) { console.warn("Koi chat startup failed", error); }
+    }
+
     // Step 27: one pair-wide private Realtime channel replaces the previous
     // collection of per-feature channels. Bursts are coalesced by domain so a
     // photo upload or rapid edits cause one refresh/render rather than many.
@@ -449,6 +455,7 @@
         littleThings: () => refreshLittleThings({ quiet: true }),
         memories: () => refreshMemories({ quiet: true }),
         world: () => refreshWorld({ quiet: true, notify: true }),
+        chat: () => cloud.chat?.notifySync?.(),
         sharedState: async () => {
           // Preserve a local edit that is still inside the short debounce window
           // before applying the partner's newest shared document.
@@ -463,6 +470,7 @@
       await cloud.littleThings.subscribe(payload.pair.id, () => refreshLittleThings({ quiet: true }));
       if (cloud.memories) await cloud.memories.subscribe(payload.pair.id, () => refreshMemories({ quiet: true }));
       if (cloud.world) await cloud.world.subscribe(payload.pair.id, () => refreshWorld({ quiet: true, notify: true }));
+      if (cloud.chat) await cloud.chat.subscribeFallback(payload.pair.id);
       if (cloud.pairs?.subscribe) await cloud.pairs.subscribe(payload.pair.id, () => refreshPair({ quiet: true }));
       if (cloud.sharedState) await cloud.sharedState.subscribe(payload.pair.id);
     }
@@ -601,7 +609,7 @@
       card.innerHTML = `
         <p class="eyebrow">KOI CLOUD</p>
         <h3>${html(cloudStatusText())}</h3>
-        <p class="small muted">${cloud.runtime.ready ? "Profiles, relationship details, shared colors/wallpaper, Little Things, Memories, and several shared Koi collections now sync through your private pair. Private-answer features remain separated until their dedicated cloud flows are enabled." : "Cloud setup is optional until you fill in config/supabase-config.js."}</p>
+        <p class="small muted">${cloud.runtime.ready ? "Profiles, relationship details, shared colors/wallpaper, Little Things, Memories, Koi World, and Chat sync through your private pair. Private-answer features remain separated until their dedicated cloud flows are enabled." : "Cloud setup is optional until you fill in config/supabase-config.js."}</p>
         ${cloud.runtime.ready ? `<div class="inline-actions"><button data-cloud-action="show-pair-info">Pair details</button><button data-cloud-action="sign-out">Sign out</button></div>` : ""}
       `;
       page.appendChild(card);
@@ -644,6 +652,7 @@
       await Promise.all([
         cloud.memories?.unsubscribe?.(),
         cloud.world?.unsubscribe?.(),
+        cloud.chat?.stop?.(),
         cloud.sharedState?.unsubscribe?.(),
         cloud.pairs?.unsubscribe?.()
       ]);
@@ -871,6 +880,7 @@
         refreshLittleThings({ quiet: true }),
         refreshMemories({ quiet: true }),
         refreshWorld({ quiet: true }),
+        cloud.chat?.refreshUnread?.(),
         cloud.sharedState?.refresh?.(),
         refreshPair({ quiet: true })
       ]);
@@ -915,6 +925,7 @@
         cloud.littleThings?.unsubscribe?.(),
         cloud.memories?.unsubscribe?.(),
         cloud.world?.unsubscribe?.(),
+        cloud.chat?.stop?.(),
         cloud.sharedState?.unsubscribe?.(),
         cloud.pairs?.unsubscribe?.()
       ]);

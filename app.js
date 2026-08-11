@@ -1016,6 +1016,10 @@ function render() {
   applyTheme();
   updateNav();
   if (runtime.route === "us") renderUs();
+  else if (runtime.route === "chat") {
+    if (typeof window.renderKoiChat === "function") window.renderKoiChat();
+    else mainView.innerHTML = `<section class="page"><article class="card card-duo"><p class="eyebrow">KOI CHAT</p><h2>Opening chat…</h2></article></section>`;
+  }
   else if (runtime.route === "memories") renderMemories();
   else if (runtime.route === "extras") renderExtras();
   else if (runtime.route === "you") renderYou();
@@ -1594,11 +1598,12 @@ document.getElementById("closeModalBtn").addEventListener("click", closeModal);
 modalBackdrop.addEventListener("click", event => { if (event.target === modalBackdrop) closeModal(); });
 document.addEventListener("keydown", event => { if (event.key === "Escape" && !modalBackdrop.hidden) closeModal(); });
 document.getElementById("openPairMenuBtn").addEventListener("click", openPairMenu);
+document.getElementById("openChatBtn")?.addEventListener("click", () => navigate("chat"));
 document.getElementById("openNotificationsBtn").addEventListener("click", openNotifications);
 
 window.addEventListener("hashchange", () => {
   const route = location.hash.replace("#", "") || "home";
-  if (["home", "us", "memories", "extras", "you"].includes(route)) { runtime.route = route; runtime.extrasView = ""; render(); }
+  if (["home", "us", "chat", "memories", "extras", "you"].includes(route)) { runtime.route = route; runtime.extrasView = ""; render(); }
 });
 
 window.addEventListener("beforeinstallprompt", event => {

@@ -25,7 +25,12 @@
       <div class="brand-wrap" aria-label="Koi">
         <span class="brand-mark">Koi</span><span class="brand-heart">💗</span>
       </div>
-      <button class="icon-button notification-dot" id="openNotificationsBtn" aria-label="Notifications">♢</button>
+      <div class="topbar-actions">
+        <button class="icon-button chat-topbar-button" id="openChatBtn" aria-label="Chat">
+          <span aria-hidden="true">💬</span><span class="chat-unread-badge" id="chatUnreadBadge" hidden>0</span>
+        </button>
+        <button class="icon-button notification-dot" id="openNotificationsBtn" aria-label="Notifications">♢</button>
+      </div>
     </header>
 
     <main id="mainView" class="main-view" aria-live="polite"></main>
@@ -111,6 +116,8 @@
   <script src="services/shared-state.js" defer></script>
   <script src="services/world.js" defer></script>
   <script src="features/koi-world.js" defer></script>
+  <script src="services/chat.js" defer></script>
+  <script src="features/koi-chat.js" defer></script>
   <script src="services/live-sync.js" defer></script>
   <script src="services/sync.js" defer></script>
   <script src="services/cloud-bootstrap.js" defer></script>

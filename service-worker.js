@@ -1,4 +1,4 @@
-const CACHE_VERSION = "koi-stability-v10-live-sync";
+const CACHE_VERSION = "koi-chat-v11";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -14,6 +14,8 @@ const APP_SHELL = [
   "./services/shared-state.js",
   "./services/world.js",
   "./features/koi-world.js",
+  "./services/chat.js",
+  "./features/koi-chat.js",
   "./services/live-sync.js",
   "./services/sync.js",
   "./services/cloud-bootstrap.js",
