@@ -310,75 +310,132 @@
     return `<details class="world-category" ${open ? "open" : ""}><summary><span><strong>${escapeHTML(title)}</strong><small>${escapeHTML(subtitle)}</small></span><b>⌄</b></summary><div class="world-feature-list">${cards.join("")}</div></details>`;
   }
 
+  function worldCategoryDefinitions() {
+    return {
+      daily: {
+        icon: "💗", title: "Daily Us", subtitle: "The things you can open every day",
+        cards: [
+          actionTile("📖", "Daily Questions", "Your private daily ritual", "open-answer-history"),
+          actionTile("💗", "Little Things", "Notice the tiny things", "open-little-things"),
+          actionTile("☺️", "Check-ins", "Mood, energy, and what you need", "open-checkin"),
+          featureTile("💭", "Thinking of You", "Send a one-tap heart", "thinking"),
+          featureTile("☺️", "Mood Bubble", "Share how you're doing", "mood"),
+          featureTile("📷", "Daily Photo", "One photo each, side by side", "dailyPhoto"),
+          featureTile("✍️", "One-Line Today", "A one-sentence daily diary", "oneLine"),
+          featureTile("💌", "Love Notes", "A mailbox just for you two", "loveNotes"),
+          featureTile("🫙", "Compliment Jar", "Collect sweet little notes", "compliments"),
+          featureTile("✉️", "Open When…", "Letters for specific moments", "openWhen"),
+          featureTile("💗", "Things I Love About You", "Keep adding reasons", "thingsLove"),
+          featureTile("🫶", "Reasons I Chose You", "The deeper list", "reasonsChosen")
+        ]
+      },
+      play: {
+        icon: "🎮", title: "Play Together", subtitle: "Games, guesses, and silly little rituals",
+        cards: [
+          featureTile("↔️", "This or That", "Choose separately, reveal together", "thisOrThat"),
+          featureTile("👀", "Who's More Likely To…", "Vote, then compare", "likelyTo"),
+          featureTile("🧠", "Who Knows Who Better?", "Guess your person's answer", "whoKnows"),
+          featureTile("▦", "Couple Bingo", "A shared monthly 3×3", "bingo"),
+          featureTile("🎨", "Draw for Me", "Send a tiny doodle", "draw"),
+          actionTile("🔮", "I Bet You", "Your prediction game", "open-predictions"),
+          actionTile("🎲", "Blind Date Builder", "Match private preferences", "open-blind-date")
+        ]
+      },
+      story: {
+        icon: "📖", title: "Our Story", subtitle: "Memories, milestones, and your relationship archive",
+        cards: [
+          featureTile("🕰️", "Relationship Timeline", "Milestones in order", "timeline"),
+          featureTile("🌱", "Our Firsts", "First dates, trips, homes, everything", "firsts"),
+          featureTile("🔒", "Time Capsules", "Lock something for future-you", "timeCapsules"),
+          featureTile("🔮", "Future Us", "Answer now, revisit later", "futureUs"),
+          featureTile("📅", "On This Day", "See old memories from today's date", "onThisDay"),
+          featureTile("🌙", "Monthly Koi Recap", "A tiny recap of your month", "monthlyRecap"),
+          featureTile("🎧", "Relationship Wrapped", "Your year in Koi", "wrapped"),
+          featureTile("📍", "Memory Map", "Your memories grouped by place", "memoryMap"),
+          featureTile("🖼️", "Photo Collections", "Make little albums", "collections"),
+          featureTile("🎞️", "Photo of Us", "Resurface a forgotten photo", "photoOfUs"),
+          actionTile("📖", "Relationship Lore", "The legends of your relationship", "open-museum"),
+          actionTile("✨", "Our Eras", "Name your chapters", "open-eras"),
+          actionTile("🎀", "Traditions", "The rituals that became yours", "open-traditions"),
+          actionTile("📷", "Then vs Now", "See how answers change", "open-then-now")
+        ]
+      },
+      together: {
+        icon: "🍓", title: "Together", subtitle: "Shared lists, dates, food, shows, and plans",
+        cards: [
+          featureTile("✨", "Things We Want To Do", "Your shared bucket list", "bucket"),
+          featureTile("📍", "Places We Want To Go", "Save cafés, cities, and tiny spots", "places"),
+          featureTile("🎬", "Watch Together", "Movies, anime, shows", "watch"),
+          featureTile("🍜", "Eat Together", "Foods and restaurants to try", "eat"),
+          featureTile("🎁", "Gift Hints", "Make gift-giving easier", "giftHints"),
+          featureTile("✈️", "Trip Together", "A lightweight couples trip board", "tripTogether"),
+          actionTile("💌", "Date Jar", "Pick something to do together", "open-date-jar")
+        ]
+      },
+      know: {
+        icon: "🫧", title: "Know Me", subtitle: "The useful manual for loving each other well",
+        cards: [
+          featureTile("📘", "My Manual", "What helps, what doesn't, what I need", "manual"),
+          featureTile("⭐", "Favorites", "Food, flowers, sizes, everything", "favorites"),
+          featureTile("✨", "Current Obsessions", "What you're into right now", "obsessions")
+        ]
+      },
+      future: {
+        icon: "🌙", title: "Private & Future", subtitle: "Distance, surprises, secrets, and later",
+        cards: [
+          featureTile("⏳", "Next Time We See Each Other", "A reunion countdown", "nextSee"),
+          featureTile("🕓", "Our Time Zones", "Keep both local times together", "timezones"),
+          featureTile("🔐", "Secret Memory", "Lock a memory until a date", "secretMemory"),
+          featureTile("📝", "Private Draft", "Write it before you're ready to send", "privateDraft"),
+          featureTile("🎁", "Surprise Mode", "Plan something without spoilers", "surprise")
+        ]
+      },
+      world: {
+        icon: "🏠", title: "Our World", subtitle: "Your shared room, museum, and little Koi life",
+        cards: [
+          actionTile("🛋️", "Our Room", "Decor, koi, and Koi Hearts", "open-room"),
+          actionTile("🏛️", "Our Museum", "Everything becomes an exhibit", "open-museum")
+        ]
+      }
+    };
+  }
+
+  function worldCategoryButton(key, config) {
+    return `<button class="world-category-tile" type="button" data-world-category="${escapeHTML(key)}">
+      <span class="world-category-tile-icon">${config.icon}</span>
+      <span class="world-category-tile-copy"><strong>${escapeHTML(config.title)}</strong><small>${escapeHTML(config.subtitle)}</small></span>
+      <span class="world-category-count">${config.cards.length}</span>
+    </button>`;
+  }
+
+  function renderWorldCategory(key) {
+    const config = worldCategoryDefinitions()[key];
+    if (!config) return renderWorldLanding();
+    setFab();
+    mainView.innerHTML = `<section class="page world-page world-category-page">
+      ${worldHeader("KOI WORLD", `${config.icon} ${config.title}`, config.subtitle)}
+      <div class="world-feature-list world-category-feature-list">${config.cards.join("")}</div>
+    </section>`;
+  }
+
   function renderWorldLanding() {
     setFab();
-    mainView.innerHTML = `<section class="page world-page">
-      <div class="page-header"><div><p class="eyebrow">YOUR LITTLE WORLD</p><h1>Extras ✦</h1><p>Connect, play, remember, plan, and keep becoming more <em>you two</em>.</p></div><span class="pill pill-pink">${state.worldItems.length} saved</span></div>
-      <article class="card card-duo world-hero"><div><p class="eyebrow">KOI WORLD</p><h2>More than a scrapbook.</h2><p class="small muted">Every section below is built for two phones and your private pair.</p></div><div class="world-hero-koi">🐟💗🐟</div></article>
-      ${category("💗 Connect", "Tiny daily ways to feel close", [
-        actionTile("📖", "Daily Questions", "Your existing private daily ritual", "open-answer-history"),
-        actionTile("💗", "Little Things", "Notice the tiny things", "open-little-things"),
-        actionTile("☺️", "Check-ins", "Mood, energy, and what you need", "open-checkin"),
-        featureTile("💭", "Thinking of You", "Send a tiny heart ping", "thinking"),
-        featureTile("☺️", "Mood Bubble", "See how your person is doing", "mood"),
-        featureTile("📷", "Daily Photo", "One photo each, side by side", "dailyPhoto"),
-        featureTile("✍️", "One-Line Today", "A one-sentence daily diary", "oneLine"),
-        featureTile("💌", "Love Notes", "A mailbox just for you two", "loveNotes"),
-        featureTile("🫙", "Compliment Jar", "Collect and randomly reveal compliments", "compliments"),
-        featureTile("✉️", "Open When…", "Letters for specific moments", "openWhen"),
-        featureTile("💗", "Things I Love About You", "Keep adding reasons", "thingsLove"),
-        featureTile("🫶", "Reasons I Chose You", "The deeper list", "reasonsChosen")
-      ], true)}
-      ${category("🎮 Play", "Private answers, reveals, and tiny games", [
-        featureTile("↔️", "This or That", "Choose separately, reveal together", "thisOrThat"),
-        featureTile("👀", "Who's More Likely To…", "Vote, then compare", "likelyTo"),
-        featureTile("🧠", "Who Knows Who Better?", "Guess your person's answer", "whoKnows"),
-        featureTile("▦", "Couple Bingo", "A shared monthly 3×3", "bingo"),
-        featureTile("🎨", "Draw for Me", "Send a tiny doodle", "draw"),
-        actionTile("🔮", "I Bet You", "Your existing prediction game", "open-predictions"),
-        actionTile("🎲", "Blind Date Builder", "Match private preferences", "open-blind-date")
-      ])}
-      ${category("📖 Our Story", "Your relationship as an archive", [
-        featureTile("🕰️", "Relationship Timeline", "Milestones in order", "timeline"),
-        featureTile("🌱", "Our Firsts", "First dates, trips, homes, everything", "firsts"),
-        featureTile("🔒", "Time Capsules", "Lock something for future-you", "timeCapsules"),
-        featureTile("🔮", "Future Us", "Answer now, revisit later", "futureUs"),
-        featureTile("📅", "On This Day", "See old memories from today's date", "onThisDay"),
-        featureTile("🌙", "Monthly Koi Recap", "A tiny recap of your month", "monthlyRecap"),
-        featureTile("🎧", "Relationship Wrapped", "Your year in Koi", "wrapped"),
-        featureTile("📍", "Memory Map", "Your memories grouped by place", "memoryMap"),
-        featureTile("🖼️", "Photo Collections", "Make little albums", "collections"),
-        featureTile("🎞️", "Photo of Us", "Resurface a forgotten photo", "photoOfUs"),
-        actionTile("📖", "Relationship Lore", "The legends of your relationship", "open-museum"),
-        actionTile("✨", "Our Eras", "Name your chapters", "open-eras"),
-        actionTile("🎀", "Traditions", "The rituals that became yours", "open-traditions"),
-        actionTile("📷", "Then vs Now", "See how answers change", "open-then-now")
-      ])}
-      ${category("🍓 Together", "Useful shared lists", [
-        featureTile("✨", "Things We Want To Do", "Your shared bucket list", "bucket"),
-        featureTile("📍", "Places We Want To Go", "Save cafés, cities, and tiny spots", "places"),
-        featureTile("🎬", "Watch Together", "Movies, anime, shows", "watch"),
-        featureTile("🍜", "Eat Together", "Foods and restaurants to try", "eat"),
-        featureTile("🎁", "Gift Hints", "Make gift-giving easier", "giftHints"),
-        featureTile("✈️", "Trip Together", "A lightweight couples trip board", "tripTogether"),
-        actionTile("💌", "Date Jar", "Pick something to do together", "open-date-jar")
-      ])}
-      ${category("🫧 Know Me", "The useful manual for loving this person", [
-        featureTile("📘", "My Manual", "What helps, what doesn't, what I need", "manual"),
-        featureTile("⭐", "Favorites", "Food, flowers, sizes, everything", "favorites"),
-        featureTile("✨", "Current Obsessions", "What you're into right now", "obsessions")
-      ])}
-      ${category("🌍 Away & Future", "For distance, surprises, and later", [
-        featureTile("⏳", "Next Time We See Each Other", "A reunion countdown", "nextSee"),
-        featureTile("🕓", "Our Time Zones", "Keep both local times together", "timezones"),
-        featureTile("🔐", "Secret Memory", "Lock a memory until a date", "secretMemory"),
-        featureTile("📝", "Private Draft", "Write it before you're ready to send", "privateDraft"),
-        featureTile("🎁", "Surprise Mode", "Plan something without spoilers", "surprise")
-      ])}
-      ${category("🏠 Our World", "The place your relationship grows", [
-        actionTile("🛋️", "Our Room", "Decor, koi, and Koi Hearts", "open-room"),
-        actionTile("🏛️", "Our Museum", "Everything becomes an exhibit", "open-museum")
-      ])}
+    const categories = worldCategoryDefinitions();
+    mainView.innerHTML = `<section class="page world-page world-landing-clean">
+      <div class="page-header world-clean-header"><div><p class="eyebrow">YOUR LITTLE WORLD</p><h1>Koi World ✦</h1><p>Everything you two do together, without making you hunt through one giant list.</p></div></div>
+
+      <article class="card card-duo world-today-clean">
+        <div class="section-heading" style="margin:0"><div><p class="eyebrow">QUICK ACCESS</p><h2>What do you feel like doing?</h2></div></div>
+        <div class="world-quick-grid">
+          <button type="button" data-world-view="thinking"><span>💗</span><strong>Thinking of You</strong></button>
+          <button type="button" data-world-view="mood"><span>☺️</span><strong>Mood</strong></button>
+          <button type="button" data-action="open-date-jar"><span>💌</span><strong>Date Jar</strong></button>
+          <button type="button" data-world-view="photoOfUs"><span>🎞️</span><strong>Photo of Us</strong></button>
+        </div>
+      </article>
+
+      <div class="world-section-label"><div><p class="eyebrow">EXPLORE</p><h2>Choose a space</h2></div><small>${Object.values(categories).reduce((sum, item) => sum + item.cards.length, 0)} features</small></div>
+      <div class="world-category-grid">${Object.entries(categories).map(([key, config]) => worldCategoryButton(key, config)).join("")}</div>
     </section>`;
   }
 
@@ -739,6 +796,7 @@
   }
 
   function renderWorldView(view) {
+    if (String(view || "").startsWith("category:")) return renderWorldCategory(String(view).slice(9));
     if (SIMPLE[view]) return renderSimple(view);
     if (["timeCapsules","secretMemory","surprise"].includes(view)) return renderScheduled(view);
     const map = {
@@ -823,6 +881,14 @@
   }
 
   document.addEventListener("click", async event => {
+    const categoryButton = event.target.closest("[data-world-category]");
+    if (categoryButton) {
+      event.preventDefault();
+      runtime.extrasView = "";
+      setWorldView(`category:${categoryButton.dataset.worldCategory}`);
+      return;
+    }
+
     const viewButton = event.target.closest("[data-world-view]");
     if (viewButton) {
       event.preventDefault();
