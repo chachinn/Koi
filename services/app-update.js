@@ -48,10 +48,14 @@
     if (copy) copy.innerHTML = `<strong>Updating Koi…</strong><span>One tiny moment 💗</span>`;
   }
 
-  function applyUpdate() {
+  async function applyUpdate() {
     if (!registration?.waiting) return;
     reloadForUpdate = true;
     setUpdating();
+    try {
+      window.KoiLocalState?.flushPersist?.();
+      await window.KoiCloud?.sharedState?.flushLocal?.();
+    } catch {}
     registration.waiting.postMessage({ type: "SKIP_WAITING" });
   }
 
@@ -87,8 +91,11 @@
     try {
       const reg = await navigator.serviceWorker.register("service-worker.js");
       watch(reg);
-      // A short delayed check catches a GitHub Pages deploy without making boot wait.
-      setTimeout(() => checkForUpdate({ force: true }), 1800);
+      // Browser registration already checks for a new worker. A later idle check
+      // avoids competing with auth, sync and first paint during app startup.
+      const later = () => checkForUpdate({ force: true });
+      if ("requestIdleCallback" in window) requestIdleCallback(later, { timeout: 12000 });
+      else setTimeout(later, 10000);
     } catch (error) {
       console.warn("Koi update check unavailable", error);
     }

@@ -495,7 +495,7 @@
         if (!d.serviceWorker) issues.push("Koi's service worker is not ready yet.");
         if (!d.serverConfigured) issues.push("The Supabase push server/VAPID secrets are not configured yet.");
         if (d.permission === "granted" && !d.browserSubscription) issues.push("This phone has permission but no push subscription yet.");
-        if (d.browserSubscription && d.serverSubscriptionCount < 1) issues.push("This phone's subscription is not saved in Koi Cloud yet.");
+        if (d.browserSubscription && d.serverSubscriptionCount < 1) issues.push("This phone's notification subscription hasn't reached the server yet.");
         toast(issues[0] || "Notifications look healthy on this phone 🔔");
       } catch (error) { toast(error?.message || "Notification check failed"); }
       return;

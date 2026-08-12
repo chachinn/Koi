@@ -1,28 +1,29 @@
-const CACHE_VERSION = "koi-step34-nav-fix-v17";
+const CACHE_VERSION = "koi-step35-production-stability-v18";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=34",
-  "./app.js",
-  "./data/data.js",
-  "./services/app-update.js",
-  "./config/supabase-config.js",
-  "./services/supabase.js",
-  "./services/auth.js",
-  "./services/pairs.js",
-  "./services/little-things.js",
-  "./services/memories.js",
-  "./services/shared-state.js",
-  "./services/world.js",
-  "./features/koi-world.js",
-  "./services/push-notifications.js",
-  "./services/koi-note.js",
-  "./features/koi-note.js",
-  "./services/chat.js",
-  "./features/koi-chat.js",
-  "./services/live-sync.js",
-  "./services/sync.js",
-  "./services/cloud-bootstrap.js",
+  "./style.css?v=35",
+  "./app.js?v=35",
+  "./services/boot.js?v=35",
+  "./data/data.js?v=35",
+  "./services/app-update.js?v=35",
+  "./config/supabase-config.js?v=35",
+  "./services/supabase.js?v=35",
+  "./services/auth.js?v=35",
+  "./services/pairs.js?v=35",
+  "./services/little-things.js?v=35",
+  "./services/memories.js?v=35",
+  "./services/shared-state.js?v=35",
+  "./services/world.js?v=35",
+  "./features/koi-world.js?v=35",
+  "./services/push-notifications.js?v=35",
+  "./services/koi-note.js?v=35",
+  "./features/koi-note.js?v=35",
+  "./services/chat.js?v=35",
+  "./features/koi-chat.js?v=35",
+  "./services/live-sync.js?v=35",
+  "./services/sync.js?v=35",
+  "./services/cloud-bootstrap.js?v=35",
   "./manifest.json",
   "./icon/icon-192.png",
   "./icon/icon-512.png",
@@ -67,7 +68,25 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Same-origin static assets: cache first with background refresh.
+  // Cache the pinned Supabase browser client after the first successful load.
+  // This lets an already-installed Koi reopen more reliably if the CDN is
+  // temporarily unavailable, without making service-worker installation depend on it.
+  if (requestURL.hostname === "cdn.jsdelivr.net" && requestURL.pathname.includes("/@supabase/supabase-js@2.111.0/")) {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        return fetch(event.request).then(response => {
+          const copy = response.clone();
+          caches.open(CACHE_VERSION).then(cache => cache.put(event.request, copy)).catch(() => {});
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Same-origin static assets: cache first with background refresh. Versioned
+  // code URLs prevent old JavaScript from being mixed with a newly deployed HTML shell.
   if (requestURL.origin === self.location.origin) {
     event.respondWith(
       caches.match(event.request).then(cached => {

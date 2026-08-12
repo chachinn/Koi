@@ -1,5 +1,5 @@
 /*
-  Koi 💗 — Build 1.2 Data Layer
+  Koi 💗 — Static prompts and options
   Local-first static data used by app.js.
   Keep this file beside index.html, style.css and app.js.
 */

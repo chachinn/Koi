@@ -5,7 +5,7 @@
 
   function requireClient() {
     if (!cloud.configured || !cloud.client) {
-      throw new Error("Koi Cloud is not configured yet.");
+      throw new Error("Koi sync is unavailable right now.");
     }
     return cloud.client;
   }
@@ -38,18 +38,6 @@
       const { data, error } = await client.auth.signInWithPassword({ email, password });
       if (error) throw error;
       cloud.runtime.session = data.session || null;
-      return data;
-    },
-
-    async signInWithGoogle() {
-      const client = requireClient();
-      const { data, error } = await client.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: cloud.config.authRedirectUrl
-        }
-      });
-      if (error) throw error;
       return data;
     },
 

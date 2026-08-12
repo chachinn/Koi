@@ -132,7 +132,7 @@
   function renderAuthGate(message = "") {
     showGate(`
       <div class="cloud-gate-brand">Koi <span>💗</span></div>
-      <p class="eyebrow">KOI CLOUD</p>
+      <p class="eyebrow">WELCOME TO KOI</p>
       <h1>Your private space, on both phones.</h1>
       <p class="lead">Create your own account, then connect exactly one partner.</p>
       ${message ? `<div class="cloud-message">${html(message)}</div>` : ""}
@@ -157,7 +157,7 @@
         <span aria-hidden="true" style="display:inline-grid;place-items:center;width:23px;height:23px;margin-right:7px;border-radius:50%;background:#fff;border:1px solid var(--border);font:700 14px Arial,sans-serif;">G</span>
         Continue with Google
       </button>
-      <p class="micro muted cloud-security-note">Koi uses your browser-safe Supabase publishable key. Access to couple data is enforced in the database with Row Level Security.</p>
+      <p class="micro muted cloud-security-note">Your shared space is private to your account and the partner you connect.</p>
     `);
   }
 
@@ -220,7 +220,7 @@
           <h2>Create our Koi</h2>
           <p class="small muted">You'll get a one-time invite code for your partner.</p>
           <div class="field cloud-anniversary-field">
-            <label>Anniversary</label>
+            <label>Together since <span class="muted">(optional)</span></label>
             <div class="cloud-anniversary-picker" role="group" aria-label="Anniversary date">
               <select name="anniversaryMonth" aria-label="Anniversary month">
                 <option value="">Month</option>${monthOptions}
@@ -276,13 +276,13 @@
     state.profiles[0].displayName = meCloud?.display_name || currentSession.user.user_metadata?.display_name || currentSession.user.email?.split("@")[0] || "You";
     state.profiles[0].avatar = meCloud?.avatar || "🌷";
     state.profiles[1].displayName = partnerCloud?.display_name || "Waiting for partner";
-    state.profiles[1].avatar = partnerCloud?.avatar || "☁️";
+    state.profiles[1].avatar = partnerCloud?.avatar || "💗";
 
     state.pair.pairId = payload.pair.id;
     state.pair.relationshipMode = payload.pair.relationship_mode || (payload.pair.wedding_anniversary ? "married" : (state.pair.relationshipMode || "dating"));
-    state.pair.datingAnniversary = payload.pair.dating_anniversary || payload.pair.anniversary || state.pair.datingAnniversary || state.pair.anniversary;
+    state.pair.datingAnniversary = payload.pair.dating_anniversary || payload.pair.anniversary || "";
     state.pair.weddingAnniversary = payload.pair.wedding_anniversary || "";
-    state.pair.anniversary = state.pair.datingAnniversary || payload.pair.anniversary || state.pair.anniversary;
+    state.pair.anniversary = state.pair.datingAnniversary || "";
     state.pair.inviteCode = payload.invite?.code || "";
     state.onboardingComplete = true;
 
@@ -503,13 +503,16 @@
     }
 
     renderSoon();
+    requestAnimationFrame(() => window.KoiBoot?.ready?.("connected"));
   }
 
   async function loadAccountAndPair() {
+    window.KoiBoot?.setStatus?.("Opening your shared Koi…");
     const payload = await cloud.pairs.getMine();
     if (!payload?.pair) {
       cloud.runtime.ready = false;
       renderPairGate();
+      window.KoiBoot?.ready?.("pair-gate");
       return;
     }
     await connectPair(payload);
@@ -523,12 +526,14 @@
       if (!currentSession) {
         cloud.runtime.ready = false;
         renderAuthGate();
+        window.KoiBoot?.ready?.("auth-gate");
       } else {
         await loadAccountAndPair();
       }
     } catch (error) {
       console.error(error);
-      renderAuthGate(`Could not connect to Koi Cloud: ${error.message || error}`);
+      renderAuthGate(`Could not connect to Koi: ${error.message || error}`);
+      window.KoiBoot?.ready?.("cloud-error");
     } finally {
       booting = false;
     }
@@ -634,9 +639,9 @@
       const card = document.createElement("article");
       card.className = "card card-duo cloud-status-card";
       card.innerHTML = `
-        <p class="eyebrow">KOI CLOUD</p>
-        <h3>${html(cloudStatusText())}</h3>
-        <p class="small muted">${cloud.runtime.ready ? "Profiles, relationship details, shared colors/wallpaper, Little Things, Memories, Koi World, and Chat sync through your private pair. Private-answer features remain separated until their dedicated cloud flows are enabled." : "Cloud setup is optional until you fill in config/supabase-config.js."}</p>
+        <p class="eyebrow">YOUR KOI</p>
+        <h3>${cloud.runtime.ready ? "Connected 💗" : html(cloudStatusText())}</h3>
+        <p class="small muted">${cloud.runtime.ready ? "Your shared Koi stays connected across both phones. Changes to synced sections are saved privately and kept up to date." : "Sign in to keep your shared space available across your devices."}</p>
         ${cloud.runtime.ready ? `<div class="inline-actions"><button data-cloud-action="show-pair-info">Pair details</button><button data-cloud-action="sign-out">Sign out</button></div>` : ""}
       `;
       page.appendChild(card);
@@ -752,22 +757,12 @@
     try {
       await cloud.memories.remove(id);
       await refreshMemories({ quiet: true });
-      toast("Memory deleted from Koi Cloud");
+      toast("Memory deleted 💗");
     } catch (error) {
       state.memories = before;
       saveState(); render();
       toast(error.message || "Could not delete this memory");
     }
-  }, true);
-
-  // Real accounts replace the legacy same-device profile switcher.
-  document.addEventListener("click", event => {
-    if (!cloud.runtime.ready) return;
-    const switchButton = event.target.closest('[data-action="switch-profile"]');
-    if (!switchButton) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    toast("You're signed in as yourself on this phone 💗");
   }, true);
 
   document.addEventListener("click", async event => {
@@ -966,7 +961,8 @@
   });
 
   if (!cloud.configured) {
-    console.info("Koi Cloud Foundation is installed but not configured. Local mode remains active.");
+    // app.js reveals local mode after the load event so onboarding is already
+    // in place before the splash goes away.
     return;
   }
 

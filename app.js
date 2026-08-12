@@ -1,34 +1,14 @@
 /*
   Koi 💗 — Application shell
-  Local-first PWA prototype.
-  --------------------------------------------
-  This build intentionally keeps everything in localStorage so you can test
-  the complete app flow before connecting Supabase/auth/sync later.
+  A private shared space for two people.
 
-  Core features:
-  - Onboarding + local pair setup
-  - Two local test profiles (switch between partners)
-  - Home / Today daily question flow
-  - Private answers locked until both respond
-  - Answer reactions + question skip
-  - Us dashboard + derived journey stats
-  - Check-ins (mood, energy, social battery, need)
-  - Memories CRUD + optional compressed photo
-  - Same Moment, Two Sides private perspective flow
-  - Relationship Lore CRUD
-  - Our Museum auto-gallery
-  - Date Jar CRUD + random picker + filters
-  - Our Room + unlockable/customizable decor
-  - Our Canon + Traditions
-  - Then vs Now starter flow
-  - Paired pink + lavender themes + wallpapers
-  - Reminder preferences + browser notification permission hook
-  - JSON export/import + local reset
-  - Offline service worker + install prompt hook
+  Local state is used as a fast offline cache. Signed-in shared features sync
+  through private sync, while static prompts and customization options remain
+  available offline. User-created collections always start empty.
 */
 
 const STORAGE_KEY = "koi_build1_state_v1";
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 const QUESTION_BANK = [
   { id: "q01", category: "Sweet", text: "What’s one small thing I did recently that made you feel loved?" },
@@ -221,20 +201,20 @@ const DEFAULT_STATE = {
   currentUserId: "u1",
   profiles: [
     { id: "u1", displayName: "You", avatar: "🌷" },
-    { id: "u2", displayName: "Love", avatar: "☁️" }
+    { id: "u2", displayName: "Partner", avatar: "💗" }
   ],
   pair: {
-    pairId: "pair_local_demo",
-    anniversary: "2023-03-12",
+    pairId: "",
+    anniversary: "",
     relationshipMode: "dating",
-    datingAnniversary: "2023-03-12",
+    datingAnniversary: "",
     weddingAnniversary: "",
-    inviteCode: "KOI-LOVE",
-    currentEra: "Golden Everyday Era",
-    comfortFood: "Ramen",
-    song: "Our favorite song",
+    inviteCode: "",
+    currentEra: "",
+    comfortFood: "",
+    song: "",
     nextDate: "",
-    nextDateLabel: "Dinner + something fun"
+    nextDateLabel: ""
   },
   settings: {
     themePair: "wedding",
@@ -245,8 +225,8 @@ const DEFAULT_STATE = {
     customWallpaperEnabled: false,
     customWallpaperOverlay: "medium",
     customWallpaperPosition: "center",
-    dailyReminder: true,
-    weeklyCheckin: true,
+    dailyReminder: false,
+    weeklyCheckin: false,
     notificationPermissionAsked: false,
     questionPack: "all"
   },
@@ -258,94 +238,64 @@ const DEFAULT_STATE = {
   dateCompletions: [],
   blindDate: { preferences: { u1: null, u2: null }, match: null, updatedAt: null },
   predictions: [],
-  eras: [
-    { id: "era_current", title: "Golden Everyday Era", emoji: "✨", startDate: "2023-03-12", endDate: "", description: "The chapter we are living right now.", active: true }
-  ],
-  activeEraId: "era_current",
+  eras: [],
+  activeEraId: "",
   dismissedTraditionSuggestions: [],
   museum: { featuredIds: [] },
   checkins: [],
-  memories: [
-    {
-      id: "m_seed_1",
-      type: "memory",
-      title: "How We Started",
-      date: "2023-03-12",
-      location: "Our beginning",
-      note: "The chapter that started everything.",
-      tags: ["Milestone"],
-      chapter: "How We Started",
-      photo: "",
-      icon: "💗",
-      createdAt: Date.now() - 100000
-    },
-    {
-      id: "m_seed_2",
-      type: "memory",
-      title: "Japan Trip",
-      date: "2025-03-31",
-      location: "Japan",
-      note: "Tiny streets, favorite food, and a lot of walking together.",
-      tags: ["Trip", "Japan"],
-      chapter: "Adventures",
-      photo: "",
-      icon: "🌸",
-      createdAt: Date.now() - 90000
-    },
-    {
-      id: "m_seed_3",
-      type: "two-sides",
-      title: "Coffee Date",
-      date: "2025-04-12",
-      location: "A tiny café",
-      note: "One morning, remembered twice.",
-      tags: ["Everyday"],
-      chapter: "Little Days",
-      photo: "",
-      icon: "☕",
-      sides: {
-        u1: { text: "I loved how excited you got about the tiny bookstore beside the café.", submittedAt: Date.now() - 70000 },
-        u2: { text: "Your laugh made the whole slow morning feel special.", submittedAt: Date.now() - 65000 }
-      },
-      createdAt: Date.now() - 80000
-    }
-  ],
-  lore: [
-    {
-      id: "l_seed_1",
-      title: "The Pancake Debate",
-      origin: "One of us wanted fluffy pancakes. The other cared way too much about crispy edges.",
-      meaning: "A reminder that tiny disagreements usually become our funniest stories.",
-      tags: ["Food", "Inside Joke"],
-      icon: "🥞",
-      createdAt: Date.now() - 60000
-    }
-  ],
-  dateIdeas: [
-    { id: "d1", title: "Pick a café neither of us has tried", category: "Food", budget: "Cheap", completed: false },
-    { id: "d2", title: "Museum + dessert date", category: "Out", budget: "Treat", completed: false },
-    { id: "d3", title: "Cook one new recipe together", category: "At Home", budget: "Cheap", completed: false },
-    { id: "d4", title: "Sunset walk + convenience-store snacks", category: "Outdoor", budget: "Free", completed: false }
-  ],
-  canon: [
-    { id: "c1", category: "Comfort Food", text: "Ramen", status: "official" },
-    { id: "c2", category: "Default Mood", text: "A little silly", status: "official" }
-  ],
-  traditions: [
-    { id: "t1", title: "Sunday slow morning", cadence: "Weekly", startDate: "2025-01-05", count: 8 }
-  ],
-  thenNow: [
-    { id: "tn1", prompt: "What does our perfect slow morning look like?", oldDate: "2025-01-10", oldAnswer: "Coffee, breakfast, and nowhere to rush to.", newAnswer: "", completedAt: "" }
-  ],
+  memories: [],
+  lore: [],
+  dateIdeas: [],
+  canon: [],
+  traditions: [],
+  thenNow: [],
   room: {
-    level: 3,
+    level: 1,
     mascots: { pinkName: "Pink Koi", lavenderName: "Lavender Koi" },
     unlockedMoments: [],
-    activeDecor: ["lights", "frame", "plant", "plush"],
-    unlockedDecor: ["lights", "frame", "plant", "plush", "camera", "heart", "books"],
+    activeDecor: ["lights", "plant"],
+    unlockedDecor: ["lights", "frame", "plant", "plush"],
     pet: "🐰"
   }
 };
+
+const LEGACY_LOCAL_SEED_IDS = Object.freeze({
+  memories: new Set(["m_seed_1", "m_seed_2", "m_seed_3"]),
+  lore: new Set(["l_seed_1"]),
+  dateIdeas: new Set(["d1", "d2", "d3", "d4"]),
+  canon: new Set(["c1", "c2"]),
+  traditions: new Set(["t1"]),
+  thenNow: new Set(["tn1"])
+});
+
+function migrateLegacyState(saved) {
+  const next = deepMerge(clone(DEFAULT_STATE), saved || {});
+  const oldVersion = Number(saved?.version || 0);
+
+  if (oldVersion < 4) {
+    Object.entries(LEGACY_LOCAL_SEED_IDS).forEach(([key, ids]) => {
+      next[key] = Array.isArray(next[key]) ? next[key].filter(item => !ids.has(item?.id)) : [];
+    });
+
+    next.eras = Array.isArray(next.eras) ? next.eras.filter(item => !(
+      item?.id === "era_current" &&
+      item?.title === "Golden Everyday Era" &&
+      item?.startDate === "2023-03-12"
+    )) : [];
+    if (!next.eras.some(item => item?.id === next.activeEraId)) next.activeEraId = next.eras.find(item => item?.active)?.id || "";
+
+    const localDemoPair = next.pair?.pairId === "pair_local_demo" || next.pair?.inviteCode === "KOI-LOVE";
+    if (localDemoPair) {
+      next.pair = { ...clone(DEFAULT_STATE.pair), relationshipMode: next.pair?.relationshipMode === "married" ? "married" : "dating" };
+      next.profiles = clone(DEFAULT_STATE.profiles);
+      next.onboardingComplete = false;
+    }
+  }
+
+  next.version = CURRENT_VERSION;
+  return next;
+}
+
 
 function deepMerge(base, saved) {
   if (Array.isArray(base)) return Array.isArray(saved) ? saved : base;
@@ -362,7 +312,7 @@ function deepMerge(base, saved) {
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    return saved ? deepMerge(clone(DEFAULT_STATE), saved) : clone(DEFAULT_STATE);
+    return saved ? migrateLegacyState(saved) : clone(DEFAULT_STATE);
   } catch (error) {
     console.warn("Could not load Koi data; starting fresh.", error);
     return clone(DEFAULT_STATE);
@@ -654,7 +604,7 @@ function greeting() {
 }
 
 function renderUs() {
-  const datingAnniversary = state.pair.datingAnniversary || state.pair.anniversary;
+  const datingAnniversary = state.pair.datingAnniversary || state.pair.anniversary || "";
   const weddingAnniversary = state.pair.weddingAnniversary || "";
   const marriedMode = state.pair.relationshipMode === "married";
   const days = daysBetween(datingAnniversary);
@@ -688,8 +638,8 @@ function renderUs() {
         </div>
         <div class="relationship-date-list us-permanent-details">
           <div><span>Relationship</span><strong>${marriedMode ? "Married" : "Dating"}</strong></div>
-          <div><span>Together since</span><strong>${escapeHTML(formatDate(datingAnniversary))}</strong></div>
-          ${marriedMode ? `<div><span>Wedding anniversary</span><strong>${escapeHTML(formatDate(weddingAnniversary))}</strong></div>` : ""}
+          <div><span>Together since</span><strong>${escapeHTML(datingAnniversary ? formatDate(datingAnniversary) : "Add a date")}</strong></div>
+          ${marriedMode ? `<div><span>Wedding anniversary</span><strong>${escapeHTML(weddingAnniversary ? formatDate(weddingAnniversary) : "Add a date")}</strong></div>` : ""}
         </div>
         <button class="button button-ghost button-block us-pair-details-button" data-action="pair-menu">Pair details</button>
       </article>
@@ -974,7 +924,7 @@ function renderYou() {
           <div class="wallpaper-control-group"><strong>Photo position</strong><div class="segmented-control">${["top","center","bottom"].map(value => `<button data-action="set-wallpaper-position" data-value="${value}" class="${position === value ? "is-active" : ""}">${value[0].toUpperCase() + value.slice(1)}</button>`).join("")}</div></div>
           <button class="button button-ghost button-block" data-action="remove-custom-wallpaper" style="margin-top:12px">Remove custom photo</button>
         ` : ""}
-        <p class="micro muted" style="margin:10px 2px 0">When Koi Cloud is connected, your custom wallpaper is stored privately and syncs to your partner's phone. Offline/local mode still keeps it on this device.</p>
+        <p class="micro muted" style="margin:10px 2px 0">When you are signed in, your custom wallpaper syncs privately to your shared Koi. You can change or remove it anytime.</p>
       </article>
 
       <div class="section-heading"><h2>Reminders</h2></div>
@@ -988,7 +938,7 @@ function renderYou() {
       <div class="setting-list">
         <button class="setting-row" data-action="export-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">⇩</span><div><strong>Export my Koi data</strong><small>Download a JSON backup of your local Koi settings and data.</small></div><span>›</span></button>
         <button class="setting-row" data-action="import-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">⇧</span><div><strong>Import Koi backup</strong><small>Restore a compatible JSON file.</small></div><span>›</span></button>
-        <button class="setting-row" data-action="reset-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">×</span><div><strong>Reset local Koi</strong><small>Deletes Koi data saved on this device.</small></div><span>›</span></button>
+        <button class="setting-row" data-action="reset-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">×</span><div><strong>Clear local Koi data</strong><small>Removes data stored only on this device. Synced shared data is kept online.</small></div><span>›</span></button>
       </div>
 
       <article class="card about-koi-card">
@@ -1067,7 +1017,7 @@ function openPairMenu() {
     </article>
     <p class="eyebrow">PAIR CODE</p>
     <div class="code-box">${escapeHTML(state.pair.inviteCode)}</div>
-    <p class="small muted">Your pair is designed for exactly two people. When Koi Cloud is available, pair details and invite status are kept with your account.</p>` });
+    <p class="small muted">Your Koi is designed for exactly two people. Pair details and invite status stay with your signed-in account.</p>` });
 }
 
 const KOI_SPARKS = Object.freeze({
@@ -1246,7 +1196,7 @@ function openEditCurrentUs() {
       <div class="field"><label>Current era</label><input name="currentEra" value="${escapeHTML(state.pair.currentEra || "")}" maxlength="80" placeholder="Golden everyday"></div>
       <div class="two-grid responsive-field-grid"><div class="field"><label>Comfort food</label><input name="comfortFood" value="${escapeHTML(state.pair.comfortFood || "")}" maxlength="100" placeholder="Ramen"></div><div class="field"><label>Our song</label><input name="song" value="${escapeHTML(state.pair.song || "")}" maxlength="120" placeholder="A song that feels like us"></div></div>
       <div class="field"><label>Next date</label>${compactDatePickerHTML("editNextDate", state.pair.nextDate || "", { required: false, futureYears: 8, pastYears: 0 })}</div>
-      <div class="field"><label>What are you doing?</label><input name="nextDateLabel" value="${escapeHTML(state.pair.nextDateLabel || "")}" maxlength="120" placeholder="Dinner + something fun"></div>
+      <div class="field"><label>What are you doing?</label><input name="nextDateLabel" value="${escapeHTML(state.pair.nextDateLabel || "")}" maxlength="120" placeholder="Dinner, movie night, café…"></div>
       <button class="button button-primary" type="submit">Save Right Now</button>
     </form>` });
 
@@ -1561,7 +1511,7 @@ function importData() {
     try {
       const parsed = JSON.parse(await file.text());
       if (!parsed || typeof parsed !== "object") throw new Error("Invalid file");
-      state = deepMerge(clone(DEFAULT_STATE), parsed); state.version = CURRENT_VERSION; saveState(); render(); toast("Koi backup restored");
+      state = migrateLegacyState(parsed); saveState(); render(); toast("Koi backup restored");
     } catch { toast("That backup file could not be imported"); }
   });
   input.click();
@@ -1597,7 +1547,6 @@ document.addEventListener("click", event => {
   else if (action === "answer-question") openAnswerQuestion();
   else if (action === "skip-question") skipQuestion();
   else if (action === "react-answer") { state.reactions[`${todayKey()}_${state.currentUserId}`] = button.dataset.value; saveState(); render(); }
-  else if (action === "switch-profile") { state.currentUserId = button.dataset.id; saveState(); closeModal(); render(); toast(`Viewing as ${currentProfile().displayName}`); }
   else if (action === "pair-menu") openPairMenu();
   else if (action === "edit-us") openEditUs();
   else if (action === "edit-us-now") openEditCurrentUs();
@@ -1667,7 +1616,7 @@ document.addEventListener("click", event => {
   else if (action === "export-data") exportData();
   else if (action === "import-data") importData();
   else if (action === "edit-profile") openEditProfile();
-  else if (action === "reset-data") { if (confirm("Reset all local Koi data on this device?")) { localStorage.removeItem(STORAGE_KEY); state = clone(DEFAULT_STATE); state.onboardingComplete = false; saveState(); showOnboarding(); render(); } }
+  else if (action === "reset-data") { if (confirm("Reset all local Koi data on this device?")) { localStorage.removeItem(STORAGE_KEY); state = clone(DEFAULT_STATE); saveState(); showOnboarding(); render(); } }
 });
 
 document.addEventListener("change", async event => {
@@ -1777,7 +1726,7 @@ function renderOnboardingStep() {
     onboardingStepEl.innerHTML = `<article class="card card-duo"><p class="eyebrow">A PRIVATE SPACE FOR TWO</p><h2>Keep the tiny things.</h2><p class="small muted">Daily questions, two-sided memories, relationship lore, your museum, your room, your date jar — all in one soft little place.</p></article>`;
   } else if (step === 1) {
     const mode = runtime.onboardingDraft.relationshipMode || "dating";
-    onboardingStepEl.innerHTML = `<div class="form-grid"><div class="two-grid"><div class="field"><label>Your emoji</label><input id="obMyAvatar" maxlength="4" value="${escapeHTML(runtime.onboardingDraft.myAvatar)}"></div><div class="field"><label>Your name</label><input id="obMyName" maxlength="40" value="${escapeHTML(runtime.onboardingDraft.myName)}" placeholder="Your name"></div></div><div class="two-grid"><div class="field"><label>Their emoji</label><input id="obPartnerAvatar" maxlength="4" value="${escapeHTML(runtime.onboardingDraft.partnerAvatar)}"></div><div class="field"><label>Their name</label><input id="obPartnerName" maxlength="40" value="${escapeHTML(runtime.onboardingDraft.partnerName)}" placeholder="Partner name"></div></div><div class="field"><label>Relationship mode</label><select id="obRelationshipMode"><option value="dating" ${mode === "dating" ? "selected" : ""}>Dating</option><option value="married" ${mode === "married" ? "selected" : ""}>Married 💍</option></select></div><div class="field"><label>Dating anniversary / together since</label>${compactDatePickerHTML("obDating", runtime.onboardingDraft.datingAnniversary || runtime.onboardingDraft.anniversary, { required: true })}</div><div class="field" id="obWeddingWrap" ${mode === "married" ? "" : "hidden"}><label>Wedding anniversary</label>${compactDatePickerHTML("obWedding", runtime.onboardingDraft.weddingAnniversary || "")}</div></div>`;
+    onboardingStepEl.innerHTML = `<div class="form-grid"><div class="two-grid"><div class="field"><label>Your emoji</label><input id="obMyAvatar" maxlength="4" value="${escapeHTML(runtime.onboardingDraft.myAvatar)}"></div><div class="field"><label>Your name</label><input id="obMyName" maxlength="40" value="${escapeHTML(runtime.onboardingDraft.myName)}" placeholder="Your name"></div></div><div class="two-grid"><div class="field"><label>Their emoji</label><input id="obPartnerAvatar" maxlength="4" value="${escapeHTML(runtime.onboardingDraft.partnerAvatar)}"></div><div class="field"><label>Their name</label><input id="obPartnerName" maxlength="40" value="${escapeHTML(runtime.onboardingDraft.partnerName)}" placeholder="Partner name"></div></div><div class="field"><label>Relationship mode</label><select id="obRelationshipMode"><option value="dating" ${mode === "dating" ? "selected" : ""}>Dating</option><option value="married" ${mode === "married" ? "selected" : ""}>Married 💍</option></select></div><div class="field"><label>Together since <span class="muted">(optional)</span></label>${compactDatePickerHTML("obDating", runtime.onboardingDraft.datingAnniversary || runtime.onboardingDraft.anniversary)}</div><div class="field" id="obWeddingWrap" ${mode === "married" ? "" : "hidden"}><label>Wedding anniversary <span class="muted">(optional)</span></label>${compactDatePickerHTML("obWedding", runtime.onboardingDraft.weddingAnniversary || "")}</div></div>`;
     const obMode = document.getElementById("obRelationshipMode");
     const obWedding = document.getElementById("obWeddingWrap");
     obMode?.addEventListener("change", () => { obWedding.hidden = obMode.value !== "married"; });
@@ -1794,14 +1743,15 @@ function collectOnboardingStep() {
   runtime.onboardingDraft.partnerAvatar = document.getElementById("obPartnerAvatar").value.trim() || "☁️";
   runtime.onboardingDraft.relationshipMode = document.getElementById("obRelationshipMode")?.value || "dating";
   try {
-    runtime.onboardingDraft.datingAnniversary = readCompactDate(document, "obDating", { required: true });
-    runtime.onboardingDraft.weddingAnniversary = runtime.onboardingDraft.relationshipMode === "married" ? readCompactDate(document, "obWedding", { required: true }) : "";
+    runtime.onboardingDraft.datingAnniversary = readCompactDate(document, "obDating");
+    runtime.onboardingDraft.weddingAnniversary = runtime.onboardingDraft.relationshipMode === "married" ? readCompactDate(document, "obWedding") : "";
     runtime.onboardingDraft.anniversary = runtime.onboardingDraft.datingAnniversary;
   } catch (error) {
     toast(error.message || "Choose your anniversary date");
     return false;
   }
-  if (!runtime.onboardingDraft.myName || !runtime.onboardingDraft.partnerName) { toast("Add both names first"); return false; }
+  if (!runtime.onboardingDraft.myName) runtime.onboardingDraft.myName = "You";
+  if (!runtime.onboardingDraft.partnerName) runtime.onboardingDraft.partnerName = "Partner";
   return true;
 }
 
@@ -1813,7 +1763,7 @@ onboardingNextBtn.addEventListener("click", async () => {
   state.profiles[1].displayName = runtime.onboardingDraft.partnerName || "Love";
   state.profiles[1].avatar = runtime.onboardingDraft.partnerAvatar || "☁️";
   state.pair.relationshipMode = runtime.onboardingDraft.relationshipMode || "dating";
-  state.pair.datingAnniversary = runtime.onboardingDraft.datingAnniversary || runtime.onboardingDraft.anniversary || todayKey();
+  state.pair.datingAnniversary = runtime.onboardingDraft.datingAnniversary || runtime.onboardingDraft.anniversary || "";
   state.pair.weddingAnniversary = state.pair.relationshipMode === "married" ? (runtime.onboardingDraft.weddingAnniversary || "") : "";
   state.pair.anniversary = state.pair.datingAnniversary;
   state.pair.inviteCode = state.pair.inviteCode || `KOI-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
@@ -1845,16 +1795,19 @@ onboardingBackBtn.addEventListener("click", () => {
 });
 
 // ------------------------------
-// PWA boot
+// App boot
 // ------------------------------
-
-if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("service-worker.js").catch(error => console.warn("Service worker registration failed", error)));
-}
-
+// services/app-update.js owns the single service-worker registration. Keeping
+// registration in one place avoids duplicate update checks during iOS startup.
 applyTheme();
-render();
-if (!state.onboardingComplete) showOnboarding();
+
+window.addEventListener("load", () => {
+  setTimeout(() => {
+    const cloudConfigured = Boolean(window.KoiCloud?.configured);
+    if (!cloudConfigured && !state.onboardingComplete) showOnboarding();
+    if (!cloudConfigured) window.KoiBoot?.ready?.("local");
+  }, 0);
+}, { once: true });
 
 
 /* ---------------------------------------------------------
@@ -1961,19 +1914,11 @@ enableAppLikeZoomLock();
     state.dateCompletions ||= [];
     state.blindDate ||= { preferences: { u1: null, u2: null }, match: null, updatedAt: null };
     state.predictions ||= [];
-    state.eras ||= [{
-      id: "era_current",
-      title: state.pair.currentEra || "Our Current Era",
-      emoji: "✨",
-      startDate: state.pair.anniversary || todayKey(),
-      endDate: "",
-      description: "The chapter we are living right now.",
-      active: true
-    }];
+    state.eras = Array.isArray(state.eras) ? state.eras : [];
     state.activeEraId ||= state.eras.find(item => item.active)?.id || state.eras[0]?.id || "";
     state.dismissedTraditionSuggestions ||= [];
     state.room ||= {};
-    state.room.activeDecor ||= ["lights", "frame", "plant", "plush"];
+    state.room.activeDecor = Array.isArray(state.room.activeDecor) ? state.room.activeDecor : ["lights", "plant"];
     state.room.mascots ||= { pinkName: "Pink Koi", lavenderName: "Lavender Koi" };
     state.room.unlockedMoments ||= [];
     state.museum ||= { featuredIds: [] };
@@ -2007,7 +1952,7 @@ enableAppLikeZoomLock();
   }
 
   ensureFeatureState();
-  state.version = Math.max(Number(state.version || 1), 2);
+  state.version = CURRENT_VERSION;
   saveState();
 
   // ---------- Shared feature helpers ----------
@@ -2454,7 +2399,7 @@ enableAppLikeZoomLock();
 
   memoryFormHTML = function memoryFormHTMLBuild12(item = {}, { twoSides = false } = {}) {
     const selectedEra=item.eraId || activeEra()?.id || "";
-    return `<form id="memoryForm" class="form-grid"><div class="field"><label>Title</label><input name="title" required maxlength="100" value="${escapeHTML(item.title||"")}" placeholder="Coffee date"></div><div class="two-grid"><div class="field"><label>Date</label><input name="date" type="date" value="${escapeHTML(item.date||todayKey())}"></div><div class="field"><label>Location</label><input name="location" maxlength="120" value="${escapeHTML(item.location||"")}" placeholder="Optional"></div></div><div class="field"><label>${twoSides?"Shared context":"Note"}</label><textarea name="note" maxlength="900">${escapeHTML(item.note||"")}</textarea></div><div class="two-grid"><div class="field"><label>Era</label><select name="eraId"><option value="">Auto by date</option>${state.eras.map(era=>`<option value="${era.id}" ${selectedEra===era.id?"selected":""}>${escapeHTML(era.emoji)} ${escapeHTML(era.title)}</option>`).join("")}</select></div><div class="field"><label>Chapter / shelf</label><input name="chapter" maxlength="60" value="${escapeHTML(item.chapter||"Little Days")}"></div></div><div class="field"><label>Tags</label><input name="tags" value="${escapeHTML((item.tags||[]).join(", "))}"></div><div class="field"><label>Photos</label><input name="photos" type="file" accept="image/*" multiple><small>${memoryPhotos(item).length ? `${memoryPhotos(item).length} saved photo${memoryPhotos(item).length === 1 ? "" : "s"}. Select more to add them.` : "Select one or multiple photos. In Koi Cloud, compressed private copies sync to both phones."}</small></div>${twoSides?`<div class="field"><label>Your private side</label><textarea name="side" required maxlength="900">${escapeHTML(item.sides?.[state.currentUserId]?.text||"")}</textarea></div>`:""}<button class="button button-primary" type="submit">Save ${twoSides?"my side":"memory"}</button></form>`;
+    return `<form id="memoryForm" class="form-grid"><div class="field"><label>Title</label><input name="title" required maxlength="100" value="${escapeHTML(item.title||"")}" placeholder="Coffee date"></div><div class="two-grid"><div class="field"><label>Date</label><input name="date" type="date" value="${escapeHTML(item.date||todayKey())}"></div><div class="field"><label>Location</label><input name="location" maxlength="120" value="${escapeHTML(item.location||"")}" placeholder="Optional"></div></div><div class="field"><label>${twoSides?"Shared context":"Note"}</label><textarea name="note" maxlength="900">${escapeHTML(item.note||"")}</textarea></div><div class="two-grid"><div class="field"><label>Era</label><select name="eraId"><option value="">Auto by date</option>${state.eras.map(era=>`<option value="${era.id}" ${selectedEra===era.id?"selected":""}>${escapeHTML(era.emoji)} ${escapeHTML(era.title)}</option>`).join("")}</select></div><div class="field"><label>Chapter / shelf</label><input name="chapter" maxlength="60" value="${escapeHTML(item.chapter||"Little Days")}"></div></div><div class="field"><label>Tags</label><input name="tags" value="${escapeHTML((item.tags||[]).join(", "))}"></div><div class="field"><label>Photos</label><input name="photos" type="file" accept="image/*" multiple><small>${memoryPhotos(item).length ? `${memoryPhotos(item).length} saved photo${memoryPhotos(item).length === 1 ? "" : "s"}. Select more to add them.` : "Select one or multiple photos. Compressed private copies sync to both phones."}</small></div>${twoSides?`<div class="field"><label>Your private side</label><textarea name="side" required maxlength="900">${escapeHTML(item.sides?.[state.currentUserId]?.text||"")}</textarea></div>`:""}<button class="button button-primary" type="submit">Save ${twoSides?"my side":"memory"}</button></form>`;
   };
 
   bindMemoryForm = function bindMemoryFormBuild12({ type, existingId = "" }) {
@@ -2488,7 +2433,7 @@ enableAppLikeZoomLock();
           await window.KoiCloud.refreshMemories?.({ quiet: true });
           runtime.memoryTab = type === "two-sides" ? "two-sides" : "memories";
           navigate("memories");
-          toast(files.length ? `Saved ${files.length} photo${files.length === 1 ? "" : "s"} to Koi Cloud 💗` : (type === "two-sides" ? "Your side was saved privately" : "Memory saved to both phones 💗"));
+          toast(files.length ? `Saved ${files.length} photo${files.length === 1 ? "" : "s"} to your shared Koi 💗` : (type === "two-sides" ? "Your side was saved privately" : "Memory saved to both phones 💗"));
           return;
         } catch (error) {
           if (submitButton) { submitButton.disabled = false; submitButton.textContent = oldText || "Save"; }

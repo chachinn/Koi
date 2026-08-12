@@ -28,6 +28,48 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function sanitizeLegacySharedData(input = {}) {
+    const data = clone(input || {});
+    let changed = false;
+
+    if (Array.isArray(data.lore)) {
+      const next = data.lore.filter(item => item?.id !== "l_seed_1");
+      if (next.length !== data.lore.length) { data.lore = next; changed = true; }
+    }
+
+    if (data.dates && Array.isArray(data.dates.dateIdeas)) {
+      const legacyIds = new Set(["d1", "d2", "d3", "d4"]);
+      const next = data.dates.dateIdeas.filter(item => !legacyIds.has(item?.id));
+      if (next.length !== data.dates.dateIdeas.length) { data.dates.dateIdeas = next; changed = true; }
+      if (Array.isArray(data.dates.dateCompletions)) {
+        const completions = data.dates.dateCompletions.filter(item => !legacyIds.has(item?.ideaId || item?.dateIdeaId || item?.id));
+        if (completions.length !== data.dates.dateCompletions.length) { data.dates.dateCompletions = completions; changed = true; }
+      }
+    }
+
+    if (data.eras && Array.isArray(data.eras.eras)) {
+      const next = data.eras.eras.filter(item => !(item?.id === "era_current" && item?.title === "Golden Everyday Era" && item?.startDate === "2023-03-12"));
+      if (next.length !== data.eras.eras.length) {
+        data.eras.eras = next;
+        if (!next.some(item => item?.id === data.eras.activeEraId)) data.eras.activeEraId = next.find(item => item?.active)?.id || "";
+        changed = true;
+      }
+    }
+
+    if (data.traditions && Array.isArray(data.traditions.traditions)) {
+      const next = data.traditions.traditions.filter(item => !(item?.id === "t1" && item?.title === "Sunday slow morning"));
+      if (next.length !== data.traditions.traditions.length) { data.traditions.traditions = next; changed = true; }
+    }
+
+    const details = data.us_details;
+    if (details && details.currentEra === "Golden Everyday Era" && details.comfortFood === "Ramen" && details.song === "Our favorite song" && details.nextDateLabel === "Dinner + something fun") {
+      data.us_details = { ...details, currentEra: "", comfortFood: "", song: "", nextDate: "", nextDateLabel: "" };
+      changed = true;
+    }
+
+    return { data, changed };
+  }
+
   function safeLore(items = []) {
     return items.map(item => {
       const copy = { ...item };
@@ -251,8 +293,10 @@
     activePairId = pairId;
     const row = await readRow(pairId);
     if (row?.data && Object.keys(row.data).length) {
-      await applyRemote(row.data);
-      return row.data;
+      const sanitized = sanitizeLegacySharedData(row.data);
+      if (sanitized.changed) await patch(pairId, sanitized.data);
+      await applyRemote(sanitized.data);
+      return sanitized.data;
     }
 
     const initial = snapshotFromLocal();
@@ -269,7 +313,11 @@
     if (refreshPromise) return refreshPromise;
     refreshPromise = (async () => {
       const row = await readRow(activePairId);
-      if (row?.data) await applyRemote(row.data);
+      if (row?.data) {
+        const sanitized = sanitizeLegacySharedData(row.data);
+        if (sanitized.changed) await patch(activePairId, sanitized.data);
+        await applyRemote(sanitized.data);
+      }
     })().finally(() => {
       refreshPromise = null;
     });

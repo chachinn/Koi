@@ -12,10 +12,15 @@
   <link rel="apple-touch-icon" sizes="180x180" href="icon/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="icon/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="icon/favicon-16.png" />
-  <link rel="stylesheet" href="style.css?v=34" />
+  <link rel="stylesheet" href="style.css?v=35" />
   <title>Koi 💗</title>
 </head>
-<body>
+<body class="koi-booting">
+  <div id="koiBootSplash" class="koi-boot-splash" role="status" aria-live="polite" aria-label="Opening Koi">
+    <div class="koi-boot-mark"><span>Koi</span><b>💗</b></div>
+    <p id="koiBootStatus">Opening your little world…</p>
+    <div class="koi-boot-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+  </div>
   <div id="app" class="app-shell" data-wallpaper="petals">
     <div class="ambient ambient-pink"></div>
     <div class="ambient ambient-lavender"></div>
@@ -97,30 +102,31 @@
     </div>
   </template>
 
-  <script src="data/data.js" defer></script>
-  <script src="services/app-update.js" defer></script>
-  <script src="app.js" defer></script>
+  <script src="services/boot.js?v=35" defer></script>
+  <script src="data/data.js?v=35" defer></script>
+  <script src="services/app-update.js?v=35" defer></script>
+  <script src="app.js?v=35" defer></script>
 
   <!-- Koi Cloud Foundation 2.0
        Supabase's publishable key is safe for browser use when RLS is enabled.
        NEVER place a secret/service-role key in these files. -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.min.js" defer></script>
-  <script src="config/supabase-config.js" defer></script>
-  <script src="services/supabase.js" defer></script>
-  <script src="services/auth.js" defer></script>
-  <script src="services/pairs.js" defer></script>
-  <script src="services/little-things.js" defer></script>
-  <script src="services/memories.js" defer></script>
-  <script src="services/shared-state.js" defer></script>
-  <script src="services/world.js" defer></script>
-  <script src="features/koi-world.js" defer></script>
-  <script src="services/push-notifications.js" defer></script>
-  <script src="services/koi-note.js" defer></script>
-  <script src="features/koi-note.js" defer></script>
-  <script src="services/chat.js" defer></script>
-  <script src="features/koi-chat.js" defer></script>
-  <script src="services/live-sync.js" defer></script>
-  <script src="services/sync.js" defer></script>
-  <script src="services/cloud-bootstrap.js" defer></script>
+  <script src="config/supabase-config.js?v=35" defer></script>
+  <script src="services/supabase.js?v=35" defer></script>
+  <script src="services/auth.js?v=35" defer></script>
+  <script src="services/pairs.js?v=35" defer></script>
+  <script src="services/little-things.js?v=35" defer></script>
+  <script src="services/memories.js?v=35" defer></script>
+  <script src="services/shared-state.js?v=35" defer></script>
+  <script src="services/world.js?v=35" defer></script>
+  <script src="features/koi-world.js?v=35" defer></script>
+  <script src="services/push-notifications.js?v=35" defer></script>
+  <script src="services/koi-note.js?v=35" defer></script>
+  <script src="features/koi-note.js?v=35" defer></script>
+  <script src="services/chat.js?v=35" defer></script>
+  <script src="features/koi-chat.js?v=35" defer></script>
+  <script src="services/live-sync.js?v=35" defer></script>
+  <script src="services/sync.js?v=35" defer></script>
+  <script src="services/cloud-bootstrap.js?v=35" defer></script>
 </body>
 </html>
