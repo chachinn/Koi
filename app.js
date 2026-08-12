@@ -1,11 +1,11 @@
 /*
-  Koi 💗 — Build 1
+  Koi 💗 — Application shell
   Local-first PWA prototype.
   --------------------------------------------
   This build intentionally keeps everything in localStorage so you can test
   the complete app flow before connecting Supabase/auth/sync later.
 
-  Included in Build 1:
+  Core features:
   - Onboarding + local pair setup
   - Two local test profiles (switch between partners)
   - Home / Today daily question flow
@@ -150,7 +150,7 @@ function dateParts(value = "") {
   return { year, month, day };
 }
 
-function compactDatePickerHTML(prefix, value = "", { required = false } = {}) {
+function compactDatePickerHTML(prefix, value = "", { required = false, futureYears = 0, pastYears = 100 } = {}) {
   const selected = dateParts(value);
   const now = new Date();
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -162,7 +162,9 @@ function compactDatePickerHTML(prefix, value = "", { required = false } = {}) {
     const val = String(index + 1).padStart(2, "0");
     return `<option value="${val}" ${selected.day === val ? "selected" : ""}>${index + 1}</option>`;
   }).join("");
-  const yearOptions = Array.from({ length: 101 }, (_, index) => now.getFullYear() - index)
+  const newestYear = now.getFullYear() + Math.max(0, Number(futureYears) || 0);
+  const oldestYear = now.getFullYear() - Math.max(0, Number(pastYears) || 0);
+  const yearOptions = Array.from({ length: newestYear - oldestYear + 1 }, (_, index) => newestYear - index)
     .map(year => `<option value="${year}" ${selected.year === String(year) ? "selected" : ""}>${year}</option>`).join("");
   const req = required ? "required" : "";
   return `<div class="compact-date-picker" data-date-picker="${prefix}">
@@ -373,7 +375,6 @@ let runtime = {
   memoryTab: "museum",
   extrasView: "",
   selectedDateFilter: "All",
-  installPrompt: null,
   onboardingStep: 0,
   onboardingDraft: {}
 };
@@ -521,7 +522,7 @@ function navigate(route) {
   runtime.extrasView = "";
   location.hash = route;
   render();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: "auto" });
 }
 
 function dailyQuestion() {
@@ -662,24 +663,39 @@ function renderUs() {
   const completedDates = state.dateIdeas.filter(item => item.completed).length;
   const checkinCount = state.checkins.length;
   const activityScore = Math.min(100, 30 + state.memories.length * 5 + state.lore.length * 4 + checkinCount * 2);
+  const currentEra = state.pair.currentEra || "Not set yet";
+  const comfortFood = state.pair.comfortFood || "Not set yet";
+  const song = state.pair.song || "Not set yet";
+  const nextDateLabel = state.pair.nextDateLabel || "Plan something together";
+  const nextDateText = state.pair.nextDate ? formatDate(state.pair.nextDate) : "No date chosen yet";
 
   setFab();
   mainView.innerHTML = `
-    <section class="page">
-      <div class="page-header">
-        <div><p class="eyebrow">OUR LITTLE US</p><h1>Us ♡</h1><p>Everything about your shared world.</p></div>
-        <button class="icon-button" data-action="edit-us">⚙︎</button>
+    <section class="page us-page">
+      <div class="page-header compact-page-header">
+        <div><p class="eyebrow">OUR LITTLE US</p><h1>Us ♡</h1><p>Your shared story, permanent details, and what life feels like right now.</p></div>
       </div>
 
-      <article class="card card-duo">
-        <div class="profile-switch" aria-label="Local test profile">
-          ${state.profiles.map(profile => `<button class="${state.currentUserId === profile.id ? "is-active" : ""}" data-action="switch-profile" data-id="${profile.id}">${escapeHTML(profile.avatar)} ${escapeHTML(profile.displayName)}</button>`).join("")}
+      <article class="card us-about-card">
+        <div class="section-heading" style="margin:0 0 12px">
+          <div><p class="eyebrow">ABOUT US</p><h2>${marriedMode ? "Our marriage 💍" : "Our relationship 💗"}</h2></div>
+          <button data-action="edit-us">Edit</button>
         </div>
-        <p class="micro muted" style="margin:8px 2px 0">Build 1 testing: switch profiles to test private two-person flows on one device.</p>
+        <div class="us-pair-identity">
+          <div class="us-person"><div class="avatar avatar-lg">${escapeHTML(me.avatar)}</div><div><strong>${escapeHTML(me.displayName)}</strong><small>You</small></div></div>
+          <span class="us-pair-heart">♡</span>
+          <div class="us-person is-partner"><div class="avatar avatar-lg">${escapeHTML(partner.avatar)}</div><div><strong>${escapeHTML(partner.displayName)}</strong><small>Your person</small></div></div>
+        </div>
+        <div class="relationship-date-list us-permanent-details">
+          <div><span>Relationship</span><strong>${marriedMode ? "Married" : "Dating"}</strong></div>
+          <div><span>Together since</span><strong>${escapeHTML(formatDate(datingAnniversary))}</strong></div>
+          ${marriedMode ? `<div><span>Wedding anniversary</span><strong>${escapeHTML(formatDate(weddingAnniversary))}</strong></div>` : ""}
+        </div>
+        <button class="button button-ghost button-block us-pair-details-button" data-action="pair-menu">Pair details</button>
       </article>
 
-      <article class="card">
-        <p class="eyebrow">OUR JOURNEY</p>
+      <article class="card us-journey-card">
+        <div class="section-heading" style="margin:0 0 10px"><div><p class="eyebrow">OUR JOURNEY</p><h2>So far</h2></div></div>
         <div class="stat-grid">
           <div class="stat-card"><strong>${days}</strong><span>Days together</span></div>
           <div class="stat-card"><strong>${completedDates}</strong><span>Dates completed</span></div>
@@ -687,56 +703,26 @@ function renderUs() {
         </div>
       </article>
 
-      <article class="card card-duo relationship-dates-card">
-        <div class="section-heading" style="margin:0"><div><p class="eyebrow">OUR ANNIVERSARIES</p><h2>${marriedMode ? "Married mode 💍" : "Dating mode 💗"}</h2></div><button data-action="edit-us">Edit</button></div>
-        <div class="relationship-date-list">
-          <div><span>Dating / together since</span><strong>${escapeHTML(formatDate(datingAnniversary))}</strong></div>
-          ${marriedMode ? `<div><span>Wedding anniversary</span><strong>${escapeHTML(formatDate(weddingAnniversary))}</strong></div>` : ""}
+      <article class="card card-duo us-now-card">
+        <div class="section-heading" style="margin:0 0 12px">
+          <div><p class="eyebrow">RIGHT NOW</p><h2>What life looks like lately</h2></div>
+          <button data-action="edit-us-now">Edit</button>
+        </div>
+        <div class="us-now-grid">
+          <div class="us-now-item"><span>✨</span><small>Current era</small><strong>${escapeHTML(currentEra)}</strong></div>
+          <div class="us-now-item"><span>🍜</span><small>Comfort food</small><strong>${escapeHTML(comfortFood)}</strong></div>
+          <div class="us-now-item"><span>♫</span><small>Our song</small><strong>${escapeHTML(song)}</strong></div>
+          <div class="us-now-item"><span>📅</span><small>Up next</small><strong>${escapeHTML(nextDateLabel)}</strong><em>${escapeHTML(nextDateText)}</em></div>
         </div>
       </article>
 
-      <div class="desktop-grid">
-        <article class="card card-lavender">
-          <p class="eyebrow">OUR CURRENT ERA</p>
-          <h2>${escapeHTML(state.pair.currentEra)}</h2>
-          <p class="small muted">Started whenever it started feeling like this ✨</p>
-          <div class="tags"><span class="tag">Dreamy</span><span class="tag">Everyday</span><span class="tag">Team Us</span></div>
-        </article>
-        <article class="card card-pink">
-          <p class="eyebrow">CURRENT FAVORITES</p>
-          <div class="two-grid">
-            <div class="stat-card"><strong style="font-size:15px">${escapeHTML(state.pair.comfortFood)}</strong><span>Comfort food 🍜</span></div>
-            <div class="stat-card"><strong style="font-size:15px">${escapeHTML(state.pair.song)}</strong><span>Our song ♫</span></div>
-          </div>
-        </article>
-      </div>
-
-      <article class="card">
-        <div class="section-heading" style="margin:0 0 10px"><h2>Up next</h2><button data-action="edit-us">Edit</button></div>
-        <div class="partner-row">
-          <div class="avatar">📅</div>
-          <div><strong>${escapeHTML(state.pair.nextDateLabel || "Plan a date")}</strong><small>${state.pair.nextDate ? formatDate(state.pair.nextDate) : "No date chosen yet"}</small></div>
-          <span class="partner-state">›</span>
-        </div>
-      </article>
-
-      <article class="card card-duo">
-        <p class="eyebrow">COUPLE DNA · BUILD 1 PREVIEW</p>
-        <h2>Patterns, not a relationship score.</h2>
-        <p class="small muted">This grows from what you actually save in Koi.</p>
+      <article class="card us-dna-card">
+        <div class="section-heading" style="margin:0 0 8px"><div><p class="eyebrow">COUPLE DNA</p><h2>Patterns from your Koi life</h2></div></div>
+        <p class="small muted">A playful snapshot based on what you save — never a relationship score.</p>
         ${dnaBar("Sentimental", Math.min(100, 45 + state.memories.length * 8))}
         ${dnaBar("Playful", Math.min(100, 40 + state.lore.length * 15))}
         ${dnaBar("Ritual people", Math.min(100, 30 + state.traditions.length * 18))}
         ${dnaBar("Koi activity", activityScore)}
-      </article>
-
-      <article class="card">
-        <p class="eyebrow">OUR PAIR</p>
-        <div class="two-grid">
-          <div class="stat-card"><div class="avatar avatar-lg">${escapeHTML(me.avatar)}</div><strong style="font-size:14px;margin-top:6px">${escapeHTML(me.displayName)}</strong><span>Current tester</span></div>
-          <div class="stat-card"><div class="avatar avatar-lg">${escapeHTML(partner.avatar)}</div><strong style="font-size:14px;margin-top:6px">${escapeHTML(partner.displayName)}</strong><span>Your person</span></div>
-        </div>
-        <button class="button button-secondary button-block" style="margin-top:10px" data-action="pair-menu">Open pair code</button>
       </article>
     </section>`;
 }
@@ -777,7 +763,7 @@ function renderMuseum() {
     ...state.lore.map(item => ({ kind: "lore", id: item.id, title: item.title, subtitle: "Relationship Lore", photo: "", icon: item.icon || "📖" }))
   ];
   if (!exhibits.length) return emptyState("Your museum is waiting", "Save a memory or a piece of lore to create your first exhibit.");
-  return `<article class="card card-lavender"><p class="eyebrow">OUR MUSEUM</p><h2>A gallery of our favorite chapters.</h2><p class="small muted">Your saved memories automatically become exhibits in Build 1.</p></article><div class="museum-grid">${exhibits.map(item => `<button class="exhibit" data-action="open-exhibit" data-kind="${item.kind}" data-id="${item.id}"><div class="frame">${item.photo ? `<img src="${item.photo}" alt="">` : escapeHTML(item.icon)}</div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.subtitle)}</p></button>`).join("")}</div>`;
+  return `<article class="card card-lavender"><p class="eyebrow">OUR MUSEUM</p><h2>A gallery of our favorite chapters.</h2><p class="small muted">Saved memories and lore automatically become exhibits here.</p></article><div class="museum-grid">${exhibits.map(item => `<button class="exhibit" data-action="open-exhibit" data-kind="${item.kind}" data-id="${item.id}"><div class="frame">${item.photo ? `<img src="${item.photo}" alt="" loading="lazy" decoding="async">` : escapeHTML(item.icon)}</div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.subtitle)}</p></button>`).join("")}</div>`;
 }
 
 function renderMemoryList() {
@@ -788,7 +774,7 @@ function renderMemoryList() {
 
 function memoryRow(item, action) {
   const cover = primaryMemoryPhoto(item);
-  return `<button class="memory-item" data-action="${action}" data-id="${item.id}" style="width:100%;text-align:left;color:inherit"><div class="memory-thumb">${cover ? `<img src="${cover}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:15px">` : escapeHTML(item.icon || "💗")}</div><div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(formatDate(item.date))}${item.location ? ` · ${escapeHTML(item.location)}` : ""}</p><div class="tags" style="margin-top:6px">${(item.tags || []).slice(0, 2).map(tag => `<span class="tag">${escapeHTML(tag)}</span>`).join("")}</div></div><span>›</span></button>`;
+  return `<button class="memory-item" data-action="${action}" data-id="${item.id}" style="width:100%;text-align:left;color:inherit"><div class="memory-thumb">${cover ? `<img src="${cover}" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;border-radius:15px">` : escapeHTML(item.icon || "💗")}</div><div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(formatDate(item.date))}${item.location ? ` · ${escapeHTML(item.location)}` : ""}</p><div class="tags" style="margin-top:6px">${(item.tags || []).slice(0, 2).map(tag => `<span class="tag">${escapeHTML(tag)}</span>`).join("")}</div></div><span>›</span></button>`;
 }
 
 function renderTwoSidesList() {
@@ -828,16 +814,16 @@ function renderExtras() {
       </div>
 
       <article class="card card-duo" style="margin-top:12px">
-        <p class="eyebrow">BUILD 1 LAB</p>
-        <h2>More unusual Koi ideas are already seeded into the structure.</h2>
+        <p class="eyebrow">MORE TOGETHER</p>
+        <h2>Small rituals, playful ideas, and shared plans all live here.</h2>
         <div class="tags" style="margin-top:10px"><span class="tag">Accidental Traditions</span><span class="tag">Memory Games</span><span class="tag">I Bet You</span><span class="tag">Easter Eggs</span><span class="tag">Relationship Eras</span></div>
-        <p class="small muted">These are intentionally not fully automated yet; they’ll make more sense once real two-person sync exists.</p>
+        <p class="small muted">Open Koi World from the menu for games, shared lists, future notes, and more.</p>
       </article>
     </section>`;
 }
 
 function subviewHeader(eyebrow, title, copy, extra = "") {
-  return `<div class="page-header"><div><p class="eyebrow">${escapeHTML(eyebrow)}</p><h1>${escapeHTML(title)}</h1><p>${escapeHTML(copy)}</p></div>${extra}</div><button class="button button-ghost" data-action="extras-back" style="min-height:36px;padding:7px 12px;margin-bottom:12px">← Extras</button>`;
+  return `<div class="page-header"><div><p class="eyebrow">${escapeHTML(eyebrow)}</p><h1>${escapeHTML(title)}</h1><p>${escapeHTML(copy)}</p></div>${extra}</div><button class="button button-ghost" data-action="extras-back" style="min-height:36px;padding:7px 12px;margin-bottom:12px">← Koi World</button>`;
 }
 
 function renderRoom() {
@@ -863,7 +849,7 @@ function renderRoom() {
     </div>
     <div class="section-heading"><h2>Decor</h2><span class="micro muted">Tap to show/hide</span></div>
     <div class="decor-grid">${decor.map(([id, icon, label]) => `<button class="decor-button ${active.has(id) ? "is-active" : ""}" data-action="toggle-decor" data-id="${id}" ${unlocked.has(id) ? "" : "disabled"}>${icon}<br>${escapeHTML(label)}${unlocked.has(id) ? "" : " 🔒"}</button>`).join("")}</div>
-    <article class="card card-lavender" style="margin-top:12px"><p class="eyebrow">HOW UNLOCKS WORK</p><p class="small">Memories, lore, check-ins and traditions raise your Cozy Level. Build 1 unlocks decor locally; later this can become a shared synced room.</p></article>
+    <article class="card card-lavender" style="margin-top:12px"><p class="eyebrow">HOW COZY PROGRESS WORKS</p><p class="small">Memories, lore, check-ins and traditions raise your Cozy Level and unlock more for your shared room.</p></article>
   </section>`;
 }
 
@@ -928,7 +914,7 @@ function renderTraditions() {
   setFab({ icon: "+", label: "Add tradition", action: "add-tradition" });
   mainView.innerHTML = `<section class="page">${subviewHeader("TRADITIONS", "The little things we keep doing", "Rituals become part of your relationship lore.")}
     <div class="memory-list">${state.traditions.map(item => `<div class="memory-item"><div class="memory-thumb">🎀</div><div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.cadence)} · ${item.count} times · since ${escapeHTML(formatShortDate(item.startDate))}</p></div><button class="icon-button" data-action="increment-tradition" data-id="${item.id}">+1</button></div>`).join("") || emptyState("No traditions yet", "Add something you hope becomes ‘our thing.’")}</div>
-    <article class="card card-pink" style="margin-top:12px"><p class="eyebrow">ACCIDENTAL TRADITIONS · PREVIEW</p><p class="small">Later, Koi can notice repeated saved activities and gently ask: “This might be becoming a thing… make it a tradition?”</p></article>
+    <article class="card card-pink" style="margin-top:12px"><p class="eyebrow">ACCIDENTAL TRADITIONS</p><p class="small">If something keeps becoming part of your life together, save it as a tradition so it does not disappear into the blur.</p></article>
   </section>`;
 }
 
@@ -995,16 +981,21 @@ function renderYou() {
       <div class="setting-list">
         ${settingSwitch("Daily question", "A gentle reminder for your daily Koi question", "dailyReminder", state.settings.dailyReminder)}
         ${settingSwitch("Weekly check-in", "A little Sunday relationship pulse", "weeklyCheckin", state.settings.weeklyCheckin)}
-        <button class="setting-row" data-action="request-notifications" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">🔔</span><div><strong>Message notifications</strong><small>Get a notification when your partner sends a chat message, even when Koi is closed.</small></div><span>›</span></button>
+        <button class="setting-row" data-action="request-notifications" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">🔔</span><div><strong>Message notifications</strong><small>Enable or test real push notifications for Chat and Koi Notes.</small></div><span>›</span></button>
       </div>
 
       <div class="section-heading"><h2>App & data</h2></div>
       <div class="setting-list">
-        <button class="setting-row" data-action="install-app" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">＋</span><div><strong>Install Koi</strong><small>Add this PWA to your home screen when supported.</small></div><span>›</span></button>
         <button class="setting-row" data-action="export-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">⇩</span><div><strong>Export my Koi data</strong><small>Download a JSON backup of your local Koi settings and data.</small></div><span>›</span></button>
         <button class="setting-row" data-action="import-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">⇧</span><div><strong>Import Koi backup</strong><small>Restore a compatible JSON file.</small></div><span>›</span></button>
         <button class="setting-row" data-action="reset-data" style="width:100%;text-align:left;color:inherit"><span class="setting-icon">×</span><div><strong>Reset local Koi</strong><small>Deletes Koi data saved on this device.</small></div><span>›</span></button>
       </div>
+
+      <article class="card about-koi-card">
+        <p class="eyebrow">ABOUT THE NAME</p>
+        <h2>Koi <span lang="ja">(恋)</span></h2>
+        <p>Koi (恋) means “love” or “romance.” A simple name for a space made for two people—to share memories, plans, messages, and the little things that make a relationship theirs.</p>
+      </article>
     </section>`;
 }
 
@@ -1064,16 +1055,130 @@ function skipQuestion() {
 }
 
 function openPairMenu() {
+  if (window.KoiCloud?.runtime?.ready && typeof window.KoiCloud?.renderPairInfo === "function") {
+    window.KoiCloud.renderPairInfo();
+    return;
+  }
   openModal({ eyebrow: "PAIR", title: "Just the two of us", html: `
     <article class="card card-duo">
       <div class="two-grid">
-        ${state.profiles.map(profile => `<div class="stat-card"><div class="avatar avatar-lg">${escapeHTML(profile.avatar)}</div><strong style="font-size:14px;margin-top:5px">${escapeHTML(profile.displayName)}</strong><span>${profile.id === state.currentUserId ? "Current tester" : "Partner"}</span></div>`).join("")}
+        ${state.profiles.map(profile => `<div class="stat-card"><div class="avatar avatar-lg">${escapeHTML(profile.avatar)}</div><strong style="font-size:14px;margin-top:5px">${escapeHTML(profile.displayName)}</strong><span>${profile.id === state.currentUserId ? "You" : "Your person"}</span></div>`).join("")}
       </div>
     </article>
-    <p class="eyebrow">LOCAL INVITE CODE</p>
+    <p class="eyebrow">PAIR CODE</p>
     <div class="code-box">${escapeHTML(state.pair.inviteCode)}</div>
-    <p class="small muted">Build 1 uses a local simulation. When Supabase is connected, this becomes a real one-time invite/link and the pair will be restricted to exactly two members.</p>
-    <div class="profile-switch" style="margin-top:12px">${state.profiles.map(profile => `<button class="${state.currentUserId === profile.id ? "is-active" : ""}" data-action="switch-profile" data-id="${profile.id}">${escapeHTML(profile.avatar)} Test as ${escapeHTML(profile.displayName)}</button>`).join("")}</div>` });
+    <p class="small muted">Your pair is designed for exactly two people. When Koi Cloud is available, pair details and invite status are kept with your account.</p>` });
+}
+
+const KOI_SPARKS = Object.freeze({
+  talk: [
+    "What tiny thing made you feel loved recently?",
+    "What is one ordinary day with me you would happily repeat?",
+    "What is something you want more of in our weekends?",
+    "What is a place you would love to revisit together?",
+    "Which version of us makes you smile the most?",
+    "What is something I do that always makes your day easier?",
+    "What are you currently excited to experience together?",
+    "What is one thing we should protect even when life gets busy?"
+  ],
+  do: [
+    "Put your phones down for ten minutes and tell each other one good thing from today.",
+    "Pick a snack for each other without asking what the other person wants.",
+    "Take one intentionally ridiculous photo together.",
+    "Choose a song and have a two-person living-room concert.",
+    "Each find one old photo you forgot existed and show the other person.",
+    "Give each other a five-minute shoulder or hand massage.",
+    "Make a tiny plan for something to look forward to this week.",
+    "Tell each other one thing you noticed and appreciated today."
+  ],
+  date: [
+    "Dessert-only date: go out just for something sweet.",
+    "Convenience-store challenge: pick a snack and drink for each other.",
+    "One-hour wander: choose a neighborhood and walk with no itinerary.",
+    "Tiny café date: one drink, one shared pastry, phones away.",
+    "At-home tasting night: choose three versions of the same snack or drink.",
+    "Photo walk: take five photos each of things the other person would like.",
+    "Bookstore date: choose one thing you think the other would enjoy.",
+    "Comfort-night date: favorite food + one episode/movie + no chores."
+  ]
+});
+
+function randomKoiSpark(kind) {
+  const list = KOI_SPARKS[kind] || KOI_SPARKS.talk;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function openKoiSparks() {
+  const sparks = { talk: randomKoiSpark("talk"), do: randomKoiSpark("do"), date: randomKoiSpark("date") };
+  openModal({ eyebrow: "KOI SPARKS", title: "Something small for the two of you", html: `
+    <div class="spark-list">
+      <article class="spark-card"><span>💬</span><div><small>Talk</small><strong id="sparkTalk">${escapeHTML(sparks.talk)}</strong></div><button data-action="spark-reroll" data-kind="talk" aria-label="New conversation spark">↻</button></article>
+      <article class="spark-card"><span>✨</span><div><small>Do</small><strong id="sparkDo">${escapeHTML(sparks.do)}</strong></div><button data-action="spark-reroll" data-kind="do" aria-label="New tiny challenge">↻</button></article>
+      <article class="spark-card"><span>🍓</span><div><small>Date</small><strong id="sparkDate">${escapeHTML(sparks.date)}</strong></div><button data-action="spark-reroll" data-kind="date" aria-label="New mini date">↻</button></article>
+    </div>
+    <button class="button button-secondary button-block" data-action="memory-roulette" style="margin-top:12px">🎞️ Memory Roulette</button>
+    <p class="micro muted spark-footnote">These are instant ideas only — no extra syncing or background work, so they stay light and fast.</p>` });
+}
+
+function openMemoryRoulette() {
+  const items = (state.memories || []).filter(item => item?.id);
+  if (!items.length) { toast("Add a memory first, then Koi can surprise you with one 💗"); return; }
+  const pick = items[Math.floor(Math.random() * items.length)];
+  closeModal();
+  if (pick.type === "two-sides") openTwoSides(pick.id);
+  else openMemoryDetail(pick.id);
+}
+
+function openAppMenu() {
+  openModal({ eyebrow: "KOI", title: "Your little world", html: `
+    <div class="app-menu-grid">
+      <button class="app-menu-item app-menu-featured" data-action="menu-open" data-target="spark"><span>✨</span><div><strong>Koi Sparks</strong><small>Talk, do, or pick a tiny date</small></div><b>›</b></button>
+      <button class="app-menu-item" data-action="menu-open" data-target="note"><span>💌</span><div><strong>Koi Note</strong><small>Leave something on their Home</small></div><b>›</b></button>
+      <button class="app-menu-item" data-action="menu-open" data-target="chat"><span>💬</span><div><strong>Chat</strong><small>Your private conversation</small></div><b>›</b></button>
+      <button class="app-menu-item" data-action="menu-open" data-target="world"><span>✦</span><div><strong>Koi World</strong><small>Games, lists, plans, and more</small></div><b>›</b></button>
+    </div>
+
+    <p class="app-menu-label">EVERYDAY</p>
+    <div class="app-menu-compact-grid">
+      <button data-action="menu-open" data-target="checkin"><span>☺️</span><strong>Check-in</strong></button>
+      <button data-action="menu-open" data-target="dateJar"><span>💗</span><strong>Date Jar</strong></button>
+      <button data-action="menu-open" data-target="room"><span>🛋️</span><strong>Our Room</strong></button>
+      <button data-action="menu-open" data-target="roulette"><span>🎞️</span><strong>Memory Roulette</strong></button>
+    </div>
+
+    <p class="app-menu-label">OUR STORY</p>
+    <div class="app-menu-list">
+      <button data-action="menu-open" data-target="memories"><span>▧</span><div><strong>Memories</strong><small>Your archive and Two Sides</small></div><b>›</b></button>
+      <button data-action="menu-open" data-target="museum"><span>🏛️</span><div><strong>Our Museum</strong><small>Favorite chapters together</small></div><b>›</b></button>
+      <button data-action="menu-open" data-target="pair"><span>♡</span><div><strong>Pair details</strong><small>Your connection and invite details</small></div><b>›</b></button>
+    </div>
+
+    <p class="app-menu-label">SETTINGS</p>
+    <div class="app-menu-list">
+      <button data-action="menu-open" data-target="you"><span>◌</span><div><strong>You & appearance</strong><small>Profile, colors, wallpaper, data</small></div><b>›</b></button>
+      <button data-action="menu-open" data-target="notifications"><span>♢</span><div><strong>Notifications</strong><small>Little nudges from Koi</small></div><b>›</b></button>
+    </div>` });
+}
+
+function handleMenuTarget(target) {
+  closeModal();
+  if (target === "home" || target === "us" || target === "memories" || target === "chat" || target === "you") return navigate(target);
+  if (target === "world") { runtime.worldView = ""; return navigate("extras"); }
+  if (target === "note") return requestAnimationFrame(() => window.KoiNoteUI?.open?.());
+  if (target === "spark") return requestAnimationFrame(openKoiSparks);
+  if (target === "roulette") return requestAnimationFrame(openMemoryRoulette);
+  if (target === "pair") return requestAnimationFrame(openPairMenu);
+  if (target === "notifications") return requestAnimationFrame(openNotifications);
+  if (target === "museum") { runtime.memoryTab = "museum"; return navigate("memories"); }
+  const extrasMap = { checkin: "checkin", dateJar: "dateJar", room: "room" };
+  if (extrasMap[target]) {
+    runtime.route = "extras";
+    runtime.worldView = "";
+    runtime.extrasView = extrasMap[target];
+    location.hash = "extras";
+    render();
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
 }
 
 function openNotifications() {
@@ -1089,23 +1194,20 @@ function openEditUs() {
   const relationshipMode = state.pair.relationshipMode || (state.pair.weddingAnniversary ? "married" : "dating");
   const datingAnniversary = state.pair.datingAnniversary || state.pair.anniversary || "";
   const weddingAnniversary = state.pair.weddingAnniversary || "";
-  openModal({ eyebrow: "OUR DETAILS", title: "Edit our little us", html: `
+  openModal({ eyebrow: "ABOUT US", title: "Edit our permanent details", html: `
     <form id="editUsForm" class="form-grid">
       <div class="field"><label>Relationship mode</label><select name="relationshipMode" id="editRelationshipMode"><option value="dating" ${relationshipMode === "dating" ? "selected" : ""}>Dating</option><option value="married" ${relationshipMode === "married" ? "selected" : ""}>Married 💍</option></select></div>
       <div class="field"><label>Dating anniversary / together since</label>${compactDatePickerHTML("editDating", datingAnniversary, { required: true })}</div>
       <div class="field" id="editWeddingWrap" ${relationshipMode === "married" ? "" : "hidden"}><label>Wedding anniversary</label>${compactDatePickerHTML("editWedding", weddingAnniversary, { required: false })}</div>
-      <div class="field"><label>Current era</label><input name="currentEra" value="${escapeHTML(state.pair.currentEra)}" maxlength="80"></div>
-      <div class="two-grid"><div class="field"><label>Comfort food</label><input name="comfortFood" value="${escapeHTML(state.pair.comfortFood)}"></div><div class="field"><label>Our song</label><input name="song" value="${escapeHTML(state.pair.song)}"></div></div>
-      <div class="field"><label>Next date</label><input name="nextDate" type="date" value="${escapeHTML(state.pair.nextDate)}"></div>
-      <div class="field"><label>Next date label</label><input name="nextDateLabel" value="${escapeHTML(state.pair.nextDateLabel)}"></div>
-      <button class="button button-primary" type="submit">Save</button>
+      <p class="micro muted permanent-details-note">Keep this section for the details that define your relationship. Things that change often live under <strong>Right Now</strong>.</p>
+      <button class="button button-primary" type="submit">Save About Us</button>
     </form>` });
 
   const modeSelect = document.getElementById("editRelationshipMode");
   const weddingWrap = document.getElementById("editWeddingWrap");
   modeSelect?.addEventListener("change", () => { weddingWrap.hidden = modeSelect.value !== "married"; });
 
-  document.getElementById("editUsForm").addEventListener("submit", async event => {
+  document.getElementById("editUsForm")?.addEventListener("submit", async event => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     try {
@@ -1116,7 +1218,6 @@ function openEditUs() {
       state.pair.datingAnniversary = dating;
       state.pair.weddingAnniversary = wedding;
       state.pair.anniversary = dating;
-      ["currentEra", "comfortFood", "song", "nextDate", "nextDateLabel"].forEach(key => state.pair[key] = String(form.get(key) || "").trim());
 
       if (window.KoiCloud?.runtime?.ready && window.KoiCloud?.pairs?.updateRelationship) {
         const payload = await window.KoiCloud.pairs.updateRelationship({
@@ -1132,9 +1233,35 @@ function openEditUs() {
         }
       }
 
-      saveState(); closeModal(); render(); toast("Our details updated 💗");
+      saveState(); closeModal(); render(); toast("About Us updated 💗");
     } catch (error) {
-      toast(error.message || "Could not save our details");
+      toast(error.message || "Could not save About Us");
+    }
+  });
+}
+
+function openEditCurrentUs() {
+  openModal({ eyebrow: "RIGHT NOW", title: "Edit what life looks like lately", html: `
+    <form id="editUsNowForm" class="form-grid">
+      <div class="field"><label>Current era</label><input name="currentEra" value="${escapeHTML(state.pair.currentEra || "")}" maxlength="80" placeholder="Golden everyday"></div>
+      <div class="two-grid responsive-field-grid"><div class="field"><label>Comfort food</label><input name="comfortFood" value="${escapeHTML(state.pair.comfortFood || "")}" maxlength="100" placeholder="Ramen"></div><div class="field"><label>Our song</label><input name="song" value="${escapeHTML(state.pair.song || "")}" maxlength="120" placeholder="A song that feels like us"></div></div>
+      <div class="field"><label>Next date</label>${compactDatePickerHTML("editNextDate", state.pair.nextDate || "", { required: false, futureYears: 8, pastYears: 0 })}</div>
+      <div class="field"><label>What are you doing?</label><input name="nextDateLabel" value="${escapeHTML(state.pair.nextDateLabel || "")}" maxlength="120" placeholder="Dinner + something fun"></div>
+      <button class="button button-primary" type="submit">Save Right Now</button>
+    </form>` });
+
+  document.getElementById("editUsNowForm")?.addEventListener("submit", event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      state.pair.currentEra = String(form.get("currentEra") || "").trim();
+      state.pair.comfortFood = String(form.get("comfortFood") || "").trim();
+      state.pair.song = String(form.get("song") || "").trim();
+      state.pair.nextDate = readCompactDate(form, "editNextDate", { required: false, futureAllowed: true });
+      state.pair.nextDateLabel = String(form.get("nextDateLabel") || "").trim();
+      saveState(); closeModal(); render(); toast("Right Now updated ✨");
+    } catch (error) {
+      toast(error.message || "Could not save Right Now");
     }
   });
 }
@@ -1457,17 +1584,6 @@ async function requestNotifications() {
   toast(permission === "granted" ? "Notifications allowed ♡" : "Notification permission not granted");
 }
 
-async function installApp() {
-  if (runtime.installPrompt) {
-    runtime.installPrompt.prompt();
-    const choice = await runtime.installPrompt.userChoice;
-    if (choice.outcome === "accepted") toast("Koi added to your home screen 💗");
-    runtime.installPrompt = null;
-  } else {
-    openModal({ eyebrow: "INSTALL KOI", title: "Add Koi to your home screen", html: `<article class="card card-duo"><h3>On iPhone</h3><p class="small">Open Koi in Safari → Share → <strong>Add to Home Screen</strong>.</p><h3 style="margin-top:16px">On supported browsers</h3><p class="small">Use the browser’s Install / Add to Home Screen option. Once installed, Koi opens like a standalone app.</p></article>` });
-  }
-}
-
 // ------------------------------
 // Event delegation
 // ------------------------------
@@ -1481,9 +1597,17 @@ document.addEventListener("click", event => {
   else if (action === "answer-question") openAnswerQuestion();
   else if (action === "skip-question") skipQuestion();
   else if (action === "react-answer") { state.reactions[`${todayKey()}_${state.currentUserId}`] = button.dataset.value; saveState(); render(); }
-  else if (action === "switch-profile") { state.currentUserId = button.dataset.id; saveState(); closeModal(); render(); toast(`Testing as ${currentProfile().displayName}`); }
+  else if (action === "switch-profile") { state.currentUserId = button.dataset.id; saveState(); closeModal(); render(); toast(`Viewing as ${currentProfile().displayName}`); }
   else if (action === "pair-menu") openPairMenu();
   else if (action === "edit-us") openEditUs();
+  else if (action === "edit-us-now") openEditCurrentUs();
+  else if (action === "menu-open") handleMenuTarget(button.dataset.target);
+  else if (action === "spark-reroll") {
+    const kind = button.dataset.kind || "talk";
+    const target = document.getElementById(`spark${kind[0].toUpperCase()}${kind.slice(1)}`);
+    if (target) target.textContent = randomKoiSpark(kind);
+  }
+  else if (action === "memory-roulette") openMemoryRoulette();
   else if (action === "memory-tab") { runtime.memoryTab = button.dataset.tab; renderMemories(); }
   else if (action === "add-memory-menu") openMemoryAddMenu();
   else if (action === "add-memory") { closeModal(); openAddMemory(); }
@@ -1540,11 +1664,10 @@ document.addEventListener("click", event => {
     }
   }
   else if (action === "request-notifications") requestNotifications();
-  else if (action === "install-app") installApp();
   else if (action === "export-data") exportData();
   else if (action === "import-data") importData();
   else if (action === "edit-profile") openEditProfile();
-  else if (action === "reset-data") { if (confirm("Reset all Koi Build 1 data on this device?")) { localStorage.removeItem(STORAGE_KEY); state = clone(DEFAULT_STATE); state.onboardingComplete = false; saveState(); showOnboarding(); render(); } }
+  else if (action === "reset-data") { if (confirm("Reset all local Koi data on this device?")) { localStorage.removeItem(STORAGE_KEY); state = clone(DEFAULT_STATE); state.onboardingComplete = false; saveState(); showOnboarding(); render(); } }
 });
 
 document.addEventListener("change", async event => {
@@ -1609,7 +1732,7 @@ document.querySelectorAll(".nav-item").forEach(button => button.addEventListener
 document.getElementById("closeModalBtn").addEventListener("click", closeModal);
 modalBackdrop.addEventListener("click", event => { if (event.target === modalBackdrop) closeModal(); });
 document.addEventListener("keydown", event => { if (event.key === "Escape" && !modalBackdrop.hidden) closeModal(); });
-document.getElementById("openPairMenuBtn").addEventListener("click", openPairMenu);
+document.getElementById("openAppMenuBtn")?.addEventListener("click", openAppMenu);
 document.getElementById("openChatBtn")?.addEventListener("click", () => navigate("chat"));
 document.getElementById("openNotificationsBtn").addEventListener("click", openNotifications);
 
@@ -1618,10 +1741,6 @@ window.addEventListener("hashchange", () => {
   if (["home", "us", "chat", "memories", "extras", "you"].includes(route)) { runtime.route = route; runtime.extrasView = ""; render(); }
 });
 
-window.addEventListener("beforeinstallprompt", event => {
-  event.preventDefault();
-  runtime.installPrompt = event;
-});
 
 // ------------------------------
 // Onboarding
@@ -1793,7 +1912,7 @@ function enableAppLikeZoomLock() {
 enableAppLikeZoomLock();
 
 /* =========================================================
-   KOI BUILD 1.2 — ALL 14 LOCAL-FIRST FEATURE EXPANSION
+   KOI FEATURE EXPANSION
    Adds:
    1) Daily Question History
    2) Question Packs + custom questions
@@ -2415,7 +2534,7 @@ enableAppLikeZoomLock();
     state.littleThings.forEach(item=>exhibits.push({kind:"little",id:item.id,title:item.text,date:item.date,eraId:"",chapter:"Little Things",photo:"",icon:"💗",subtitle:`Little Thing · ${item.category||"Everyday"}`}));
     const visible=filter==="All"?exhibits:exhibits.filter(item=>filter==="Memories"?item.kind==="memory":filter==="Lore"?item.kind==="lore":item.kind==="little");
     const grouped={}; visible.forEach(item=>{const era=state.eras.find(e=>e.id===item.eraId)||eraForDate(item.date);const key=era?.id||"ungrouped";grouped[key] ||= {era,items:[]};grouped[key].items.push(item);});
-    return `<article class="card card-lavender"><p class="eyebrow">OUR MUSEUM</p><h2>Your relationship, curated like it mattered — because it did.</h2><p class="small muted">Memories, Lore and Little Things become exhibits automatically.</p></article><div class="filter-scroll">${["All","Memories","Lore","Little Things"].map(value=>`<button class="filter-chip ${filter===value?"is-active":""}" data-action="museum-filter" data-value="${value}">${value}</button>`).join("")}</div>${Object.values(grouped).map(group=>`<section class="museum-section"><div class="museum-section-title"><div><p class="eyebrow">${group.era?escapeHTML(featureDate(group.era.startDate)):"MISCELLANEOUS"}</p><h2>${group.era?`${escapeHTML(group.era.emoji)} ${escapeHTML(group.era.title)}`:"Other Exhibits"}</h2></div><span class="pill pill-lavender">${group.items.length} exhibits</span></div><div class="museum-grid">${group.items.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(item=>`<button class="exhibit" data-action="open-exhibit" data-kind="${item.kind}" data-id="${item.id}"><div class="frame">${item.photo?`<img src="${item.photo}" alt="">`:escapeHTML(item.icon)}</div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.subtitle)}</p></button>`).join("")}</div></section>`).join("") || emptyState("Your museum is waiting","Save a memory, lore entry or Little Thing to create your first exhibit.")}`;
+    return `<article class="card card-lavender"><p class="eyebrow">OUR MUSEUM</p><h2>Your relationship, curated like it mattered — because it did.</h2><p class="small muted">Memories, Lore and Little Things become exhibits automatically.</p></article><div class="filter-scroll">${["All","Memories","Lore","Little Things"].map(value=>`<button class="filter-chip ${filter===value?"is-active":""}" data-action="museum-filter" data-value="${value}">${value}</button>`).join("")}</div>${Object.values(grouped).map(group=>`<section class="museum-section"><div class="museum-section-title"><div><p class="eyebrow">${group.era?escapeHTML(featureDate(group.era.startDate)):"MISCELLANEOUS"}</p><h2>${group.era?`${escapeHTML(group.era.emoji)} ${escapeHTML(group.era.title)}`:"Other Exhibits"}</h2></div><span class="pill pill-lavender">${group.items.length} exhibits</span></div><div class="museum-grid">${group.items.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(item=>`<button class="exhibit" data-action="open-exhibit" data-kind="${item.kind}" data-id="${item.id}"><div class="frame">${item.photo?`<img src="${item.photo}" alt="" loading="lazy" decoding="async">`:escapeHTML(item.icon)}</div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.subtitle)}</p></button>`).join("")}</div></section>`).join("") || emptyState("Your museum is waiting","Save a memory, lore entry or Little Thing to create your first exhibit.")}`;
   };
 
   openExhibit = function openExhibitBuild12(kind,id) {
@@ -2428,7 +2547,7 @@ enableAppLikeZoomLock();
   renderRoom = function renderRoomBuild12() {
     setFab(); const points=relationshipPoints(); const active=new Set(state.room.activeDecor||[]); const unlocked=new Set(roomUnlockedDecor()); const next=nextRoomUnlock(); const unlocks=DATA.roomUnlocks||[]; const month=new Date().getMonth(); const seasonal=month===11?"🎄 Holiday glow":month>=2&&month<=4?"🌸 Spring petals":month>=5&&month<=7?"🌿 Summer light":"🍁 Cozy season";
     mainView.innerHTML=`<section class="page">${subviewHeader("OUR COZY CORNER","Our Room","Every question, memory, date and tiny ritual helps this space grow.",`<span class="pill pill-lavender">Lv. ${roomLevel()}</span>`)}
-      <article class="card card-duo"><div class="section-heading" style="margin:0"><div><p class="eyebrow">COZY PROGRESS</p><h2>${points} Koi points</h2></div><span class="pill pill-pink">${seasonal}</span></div><div class="progress-bar" style="margin-top:10px"><span style="width:${next?Math.min(100,points/Number(next.points||1)*100):100}%"></span></div><p class="small muted">${next?`${Math.max(0,next.points-points)} points until ${next.icon} ${escapeHTML(next.label)}.`:"Everything in Build 1.2 is unlocked ✨"}</p></article>
+      <article class="card card-duo"><div class="section-heading" style="margin:0"><div><p class="eyebrow">COZY PROGRESS</p><h2>${points} Koi points</h2></div><span class="pill pill-pink">${seasonal}</span></div><div class="progress-bar" style="margin-top:10px"><span style="width:${next?Math.min(100,points/Number(next.points||1)*100):100}%"></span></div><p class="small muted">${next?`${Math.max(0,next.points-points)} points until ${next.icon} ${escapeHTML(next.label)}.`:"Everything is unlocked ✨"}</p></article>
       <div class="room-scene room-scene-v2">${active.has("lights")?`<div class="room-wall-lights">✦ · ✧ · ✦ · ✧ · ✦</div>`:""}${active.has("frame")?`<div class="room-frame">${escapeHTML(state.profiles[0].displayName)} & ${escapeHTML(state.profiles[1].displayName)}<br>our little us</div>`:""}${active.has("moonlamp")?`<div class="moon-lamp">🌙</div>`:""}<div class="room-shelf"></div><div class="room-items"><span>${active.has("books")?"📚":""}</span><span>${active.has("camera")?"📷":""}</span><span>${active.has("plant")?"🪴":""}</span><span>${active.has("souvenir")?"🎟️":""}</span></div><div class="room-floor-items"><span>${active.has("heart")?"💗":""}</span><span>${active.has("plush")?"🧸":""}</span></div>${active.has("pond")?`<div class="room-pond">${renderKoiPair("")}</div>`:`<div class="room-mascot-floating">${renderKoiPair("")}</div>`}</div>
       <article class="card card-pink"><div class="section-heading" style="margin:0"><div><p class="eyebrow">YOUR KOI</p><h2>${escapeHTML(state.room.mascots.pinkName)} + ${escapeHTML(state.room.mascots.lavenderName)}</h2></div><button data-action="edit-mascots">Name them</button></div><p class="small muted">The pink and lavender koi are Koi’s little mascots. They react to milestones and live in your shared room.</p></article>
       <div class="section-heading"><h2>Decor & unlocks</h2><span class="micro muted">tap unlocked items</span></div><div class="decor-grid">${unlocks.map(item=>`<button class="decor-button ${active.has(item.id)?"is-active":""}" data-action="toggle-decor" data-id="${item.id}" ${unlocked.has(item.id)?"":"disabled"}>${item.icon}<br>${escapeHTML(item.label)}${unlocked.has(item.id)?"":` · ${item.points} pts 🔒`}</button>`).join("")}</div>
@@ -2446,6 +2565,7 @@ enableAppLikeZoomLock();
     const me=currentProfile(); const partner=partnerProfile(); const question=dailyQuestion(); const record=todayAnswerRecord(); const mine=record[me.id]; const partnerAnswer=record[partner.id]; const reveal=bothAnswered(record); const days=daysBetween(state.pair.anniversary); const lastCheckin=[...state.checkins].reverse().find(item=>item.userId===partner.id); const pack=currentPack(); const latestLittle=state.littleThings[0];
     setFab();
     mainView.innerHTML=`<section class="page"><div class="page-header"><div><p class="eyebrow">TODAY · ${escapeHTML(formatShortDate(todayKey()))}</p><h1>Good ${greeting()}, ${escapeHTML(me.displayName)} 💗</h1><p>One tiny ritual for your little us.</p></div><span class="pill pill-lavender">♡ ${days} days</span></div>
+      ${window.KoiNoteUI?.homeCardHTML?.() || ""}
       <article class="card card-duo hero-question"><div class="question-meta"><button class="pill pill-pink interactive-pill" data-action="open-question-packs">${escapeHTML(pack.icon)} ${escapeHTML(pack.label)} ▾</button><span class="pill pill-lavender">${escapeHTML(question.category)}</span></div><h2 class="question-text">${escapeHTML(question.text)}</h2><div class="partner-status">${partnerStatusRow(me,Boolean(mine),true)}${partnerStatusRow(partner,Boolean(partnerAnswer),false)}</div>${reveal?`<div class="answer-grid">${answerCard(me,record[me.id],"is-you")}${answerCard(partner,record[partner.id],"is-partner")}</div><div class="reaction-row">${["💗","🥹","😂","🫶","👀"].map(emoji=>`<button class="reaction-button ${state.reactions[`${todayKey()}_${me.id}`]===emoji?"is-active":""}" data-action="react-answer" data-value="${emoji}">${emoji}</button>`).join("")}</div>`:`<button class="button button-primary button-block" data-action="answer-question">${mine?"Edit my private answer":"Answer privately"} 💌</button><button class="button button-ghost button-block" style="margin-top:8px" data-action="skip-question">Skip this question</button><p class="small muted" style="text-align:center;margin:10px 0 0">Both answers unlock together.</p>`}<div class="inline-actions"><button data-action="open-answer-history">Past answers</button><button data-action="open-question-packs">Question packs</button></div></article>
       <article class="card card-pink mascot-home-card">${renderKoiPair(reveal?"Both koi are doing a tiny victory lap — today’s answers unlocked.":mine?`Your koi is waiting for ${partner.displayName}.`:"Your two little koi are waiting for today’s ritual.")}</article>
       ${lastCheckin?`<article class="card card-lavender"><div class="section-heading" style="margin:0 0 8px"><h2>${escapeHTML(partner.displayName)}’s latest check-in</h2><button data-action="open-checkin">Check in</button></div>${checkinSummary(lastCheckin)}</article>`:""}
@@ -2467,7 +2587,7 @@ enableAppLikeZoomLock();
     if(runtime.extrasView==="predictions")return renderPredictions();
     if(runtime.extrasView==="eras")return renderEras();
     setFab();
-    mainView.innerHTML=`<section class="page"><div class="page-header"><div><p class="eyebrow">A LITTLE MAGIC</p><h1>Extras ✦</h1><p>The playful, sentimental and slightly weird parts of Koi.</p></div></div><div class="quick-grid">${quickCard("📖","Our Answers",`${answeredDays().length} archived days`,"open-answer-history")}${quickCard("💗","Little Things",`${state.littleThings.length} tiny moments`,"open-little-things")}${quickCard("💌","Date Jar 2.0",`${state.dateIdeas.length} ideas`,"open-date-jar")}${quickCard("🎲","Blind Date Builder","Match private preferences","open-blind-date")}${quickCard("🔮","I Bet You",`${predictionStats().resolved} rounds`,"open-predictions")}${quickCard("🛋️","Our Room",`Level ${roomLevel()}`,"open-room")}${quickCard("☺️","Check-ins",`${state.checkins.length} saved`,"open-checkin")}${quickCard("📖","Our Canon",`${state.canon.length} official things`,"open-canon")}${quickCard("🎀","Traditions",`${state.traditions.length} rituals`,"open-traditions")}${quickCard("📷","Then vs Now","Past you vs current you","open-then-now")}${quickCard("✨","Our Eras",`${state.eras.length} chapters`,"open-eras")}${quickCard("🏛️","Our Museum","Everything becomes an exhibit","open-museum")}</div><article class="card card-duo" style="margin-top:12px"><p class="eyebrow">KOI BUILD 1.2</p><h2>All fourteen feature concepts are now wired locally.</h2><p class="small muted">The next major architecture step is real authentication + two-person cloud sync. Until then, profile switching remains the safe local test mode.</p></article></section>`;
+    mainView.innerHTML=`<section class="page"><div class="page-header"><div><p class="eyebrow">A LITTLE MAGIC</p><h1>Extras ✦</h1><p>The playful, sentimental and slightly weird parts of Koi.</p></div></div><div class="quick-grid">${quickCard("📖","Our Answers",`${answeredDays().length} archived days`,"open-answer-history")}${quickCard("💗","Little Things",`${state.littleThings.length} tiny moments`,"open-little-things")}${quickCard("💌","Date Jar 2.0",`${state.dateIdeas.length} ideas`,"open-date-jar")}${quickCard("🎲","Blind Date Builder","Match private preferences","open-blind-date")}${quickCard("🔮","I Bet You",`${predictionStats().resolved} rounds`,"open-predictions")}${quickCard("🛋️","Our Room",`Level ${roomLevel()}`,"open-room")}${quickCard("☺️","Check-ins",`${state.checkins.length} saved`,"open-checkin")}${quickCard("📖","Our Canon",`${state.canon.length} official things`,"open-canon")}${quickCard("🎀","Traditions",`${state.traditions.length} rituals`,"open-traditions")}${quickCard("📷","Then vs Now","Past you vs current you","open-then-now")}${quickCard("✨","Our Eras",`${state.eras.length} chapters`,"open-eras")}${quickCard("🏛️","Our Museum","Everything becomes an exhibit","open-museum")}</div><article class="card card-duo" style="margin-top:12px"><p class="eyebrow">YOUR LITTLE WORLD</p><h2>There is more here than one screen should try to show.</h2><p class="small muted">Use the ☰ menu to jump into games, shared lists, plans, notes, and your room without crowding the main tabs.</p></article></section>`;
   };
 
   // ---------- Event layer for new actions ----------

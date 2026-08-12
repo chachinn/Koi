@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#F3B8D0" />
-  <meta name="description" content="Koi — a private little space for two." />
+  <meta name="description" content="Koi (恋) — a private space made for two to share memories, plans, messages, and the little things that make a relationship theirs." />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Koi" />
@@ -21,7 +21,7 @@
     <div class="ambient ambient-lavender"></div>
 
     <header class="topbar glass-card">
-      <button class="icon-button" id="openPairMenuBtn" aria-label="Pair menu">♡</button>
+      <button class="icon-button menu-button" id="openAppMenuBtn" aria-label="Open Koi menu"><span class="menu-glyph" aria-hidden="true">☰</span></button>
       <div class="brand-wrap" aria-label="Koi">
         <span class="brand-mark">Koi</span><span class="brand-heart">💗</span>
       </div>
@@ -44,9 +44,6 @@
       </button>
       <button class="nav-item" data-route="memories" aria-label="Memories">
         <span class="nav-icon">▧</span><span>Memories</span>
-      </button>
-      <button class="nav-item" data-route="extras" aria-label="Extras">
-        <span class="nav-icon">✦</span><span>Extras</span>
       </button>
       <button class="nav-item" data-route="you" aria-label="You">
         <span class="nav-icon">◌</span><span>You</span>
@@ -101,6 +98,7 @@
   </template>
 
   <script src="data/data.js" defer></script>
+  <script src="services/app-update.js" defer></script>
   <script src="app.js" defer></script>
 
   <!-- Koi Cloud Foundation 2.0
@@ -117,6 +115,8 @@
   <script src="services/world.js" defer></script>
   <script src="features/koi-world.js" defer></script>
   <script src="services/push-notifications.js" defer></script>
+  <script src="services/koi-note.js" defer></script>
+  <script src="features/koi-note.js" defer></script>
   <script src="services/chat.js" defer></script>
   <script src="features/koi-chat.js" defer></script>
   <script src="services/live-sync.js" defer></script>

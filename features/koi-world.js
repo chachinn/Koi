@@ -1,5 +1,5 @@
 /*
-  Koi 💗 — Step 24: Koi World
+  Koi 💗 — Koi World
   A broad two-person expansion built on Koi's pair-scoped cloud feature store.
   Shared rows sync through Supabase; private/scheduled/round rows are redacted by RPC.
 */
@@ -445,7 +445,7 @@
     runtime.worldView = view;
     location.hash = "extras";
     render();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
 
   function renderOwnerChip(row) {

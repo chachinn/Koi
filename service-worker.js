@@ -1,10 +1,11 @@
-const CACHE_VERSION = "koi-push-v13";
+const CACHE_VERSION = "koi-step33-clean-ui-v16";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
   "./data/data.js",
+  "./services/app-update.js",
   "./config/supabase-config.js",
   "./services/supabase.js",
   "./services/auth.js",
@@ -15,6 +16,8 @@ const APP_SHELL = [
   "./services/world.js",
   "./features/koi-world.js",
   "./services/push-notifications.js",
+  "./services/koi-note.js",
+  "./features/koi-note.js",
   "./services/chat.js",
   "./features/koi-chat.js",
   "./services/live-sync.js",
@@ -31,11 +34,10 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE_VERSION)
-      .then(cache => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
-  );
+  // Deliberately stay in the waiting state when an older Koi version is already
+  // controlling the page. services/app-update.js shows the user an Update button
+  // so we never refresh them in the middle of writing a note, memory, or chat.
+  event.waitUntil(caches.open(CACHE_VERSION).then(cache => cache.addAll(APP_SHELL)));
 });
 
 self.addEventListener("activate", event => {
@@ -113,13 +115,14 @@ self.addEventListener("push", event => {
 
 self.addEventListener("notificationclick", event => {
   event.notification.close();
-  const target = event.notification.data?.url || new URL("./#chat", self.registration.scope).href;
+  const type = event.notification.data?.type || "chat-message";
+  const target = event.notification.data?.url || new URL(type === "koi-note" ? "./#home" : "./#chat", self.registration.scope).href;
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const client of windows) {
       try {
         await client.focus();
-        client.postMessage({ type: "KOI_OPEN_CHAT" });
+        client.postMessage({ type: type === "koi-note" ? "KOI_OPEN_HOME" : "KOI_OPEN_CHAT" });
         return;
       } catch {}
     }

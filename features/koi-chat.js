@@ -162,11 +162,13 @@
 
   function notificationPromptHTML() {
     if (!cloud.push?.supportsPush?.()) return "";
-    if (cloud.push.isSubscribed?.()) return "";
+    if (cloud.push.isSubscribed?.()) {
+      return `<div class="chat-notification-ready"><span>🔔</span><span><strong>Message notifications on</strong><small>Chat + Koi Note push is enabled on this phone.</small></span><button type="button" data-chat-action="test-notifications">Test</button></div>`;
+    }
     const denied = cloud.push.permission === "denied";
-    return `<button type="button" class="chat-notification-prompt ${denied ? "is-denied" : ""}" data-chat-action="enable-notifications">
+    return `<div class="chat-notification-stack"><button type="button" class="chat-notification-prompt ${denied ? "is-denied" : ""}" data-chat-action="enable-notifications">
       <span>🔔</span><span><strong>${denied ? "Notifications are blocked" : "Turn on message notifications"}</strong><small>${denied ? "Allow Koi in your iPhone notification settings." : "Get a notification when your partner messages you."}</small></span><span>›</span>
-    </button>`;
+    </button><button type="button" class="chat-notification-check" data-chat-action="check-notifications">Check why notifications aren't working</button></div>`;
   }
 
   function shellHTML() {
@@ -476,6 +478,26 @@
       } catch (error) {
         toast(error?.message || "Notifications could not be enabled");
       }
+      return;
+    }
+    if (action === "test-notifications") {
+      try { const result = await cloud.push?.test?.(); toast(result?.message || "Test notification sent 🔔"); }
+      catch (error) { toast(error?.message || "Test notification failed"); }
+      return;
+    }
+    if (action === "check-notifications") {
+      try {
+        const d = await cloud.push?.diagnose?.();
+        const issues = [];
+        if (!d.supported) issues.push("Push is not supported on this device/browser.");
+        if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !d.standalone) issues.push("Open Koi from the iPhone Home Screen icon.");
+        if (d.permission === "denied") issues.push("Notifications are blocked in iPhone Settings.");
+        if (!d.serviceWorker) issues.push("Koi's service worker is not ready yet.");
+        if (!d.serverConfigured) issues.push("The Supabase push server/VAPID secrets are not configured yet.");
+        if (d.permission === "granted" && !d.browserSubscription) issues.push("This phone has permission but no push subscription yet.");
+        if (d.browserSubscription && d.serverSubscriptionCount < 1) issues.push("This phone's subscription is not saved in Koi Cloud yet.");
+        toast(issues[0] || "Notifications look healthy on this phone 🔔");
+      } catch (error) { toast(error?.message || "Notification check failed"); }
       return;
     }
     if (action === "cancel-context") {

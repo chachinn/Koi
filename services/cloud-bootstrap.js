@@ -420,6 +420,21 @@
 
   cloud.refreshWorld = refreshWorld;
 
+  async function refreshNote({ quiet = false } = {}) {
+    if (!cloud.runtime.ready || !cloud.note) return;
+    return runCoalesced("note", async () => {
+      try {
+        await cloud.note.refresh({ quiet: true });
+        renderSoon();
+      } catch (error) {
+        console.warn("Koi Note sync failed", error);
+        if (!quiet) toast(error.message || "Koi Note sync paused");
+      }
+    });
+  }
+
+  cloud.refreshNote = refreshNote;
+
   async function connectPair(payload) {
     await mapCloudPairToLocal(payload);
     cloud.runtime.ready = true;
@@ -436,10 +451,16 @@
     }
 
     await cloud.sync.flush();
+    if (cloud.note) {
+      try { await cloud.note.start(payload.pair.id); }
+      catch (error) { console.warn("Koi Note startup failed", error); }
+    }
+
     await Promise.allSettled([
       refreshLittleThings({ quiet: true }),
       refreshMemories({ quiet: true }),
-      refreshWorld({ quiet: true })
+      refreshWorld({ quiet: true }),
+      refreshNote({ quiet: true })
     ]);
 
     if (cloud.chat) {
@@ -460,6 +481,7 @@
         littleThings: () => refreshLittleThings({ quiet: true }),
         memories: () => refreshMemories({ quiet: true }),
         world: () => refreshWorld({ quiet: true, notify: true }),
+        note: () => refreshNote({ quiet: true }),
         chat: () => cloud.chat?.notifySync?.(),
         sharedState: async () => {
           // Preserve a local edit that is still inside the short debounce window
@@ -652,6 +674,10 @@
     });
   }
 
+  // Exposed so the main Us screen can open the real cloud pair details instead
+  // of the legacy local-simulation modal.
+  cloud.renderPairInfo = renderPairInfo;
+
   async function signOutAndReset() {
     try {
       // Remove this account's device endpoint before the auth token disappears.
@@ -661,6 +687,7 @@
         cloud.memories?.unsubscribe?.(),
         cloud.world?.unsubscribe?.(),
         cloud.chat?.stop?.(),
+        cloud.note?.stop?.(),
         cloud.sharedState?.unsubscribe?.(),
         cloud.pairs?.unsubscribe?.()
       ]);
@@ -676,7 +703,7 @@
     }
   }
 
-  // Capture migrated delete action before the local-only Build 1 handler sees it.
+  // Capture migrated delete action before the legacy local handler sees it.
   document.addEventListener("click", async event => {
     if (!cloud.runtime.ready) return;
     const button = event.target.closest('[data-action="delete-little-thing"]');
@@ -733,7 +760,7 @@
     }
   }, true);
 
-  // Real accounts replace the old same-device profile switcher.
+  // Real accounts replace the legacy same-device profile switcher.
   document.addEventListener("click", event => {
     if (!cloud.runtime.ready) return;
     const switchButton = event.target.closest('[data-action="switch-profile"]');
@@ -741,14 +768,6 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     toast("You're signed in as yourself on this phone 💗");
-  }, true);
-
-  // Intercept the old local tester pair-menu button once real cloud pairing is active.
-  document.getElementById("openPairMenuBtn")?.addEventListener("click", event => {
-    if (!cloud.runtime.ready) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    renderPairInfo();
   }, true);
 
   document.addEventListener("click", async event => {
@@ -888,6 +907,7 @@
         refreshLittleThings({ quiet: true }),
         refreshMemories({ quiet: true }),
         refreshWorld({ quiet: true }),
+        refreshNote({ quiet: true }),
         cloud.chat?.refreshUnread?.(),
         cloud.sharedState?.refresh?.(),
         refreshPair({ quiet: true })
@@ -934,6 +954,7 @@
         cloud.memories?.unsubscribe?.(),
         cloud.world?.unsubscribe?.(),
         cloud.chat?.stop?.(),
+        cloud.note?.stop?.(),
         cloud.sharedState?.unsubscribe?.(),
         cloud.pairs?.unsubscribe?.()
       ]);

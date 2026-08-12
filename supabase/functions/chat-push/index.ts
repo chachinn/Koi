@@ -22,93 +22,56 @@ function statusCodeOf(error: unknown) {
   return Number(candidate?.statusCode || candidate?.status || 0) || 0;
 }
 
-export default {
-  async fetch(req: Request) {
-    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY") || "";
-    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY") || "";
-    const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "";
+  let input: { action?: string; messageId?: string; pairId?: string } = {};
+  try { input = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
 
-    if (!supabaseUrl || !serviceRoleKey) return json({ error: "Server configuration is incomplete" }, 500);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || "";
+  const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY") || "";
+  const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY") || "";
+  const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "";
 
-    const token = bearerToken(req);
-    if (!token) return json({ error: "Unauthorized" }, 401);
+  if (!supabaseUrl || !serviceRoleKey) return json({ error: "Server configuration is incomplete" }, 500);
 
-    const service = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
+  // The config response contains only the public VAPID key. In normal Koi use the
+  // signed-in client calls it, so it also works with the default JWT verification.
+  if (input.action === "config") {
+    if (!vapidPublicKey) return json({ error: "Push notifications are not configured yet" }, 503);
+    return json({ publicKey: vapidPublicKey });
+  }
 
-    const { data: userData, error: userError } = await service.auth.getUser(token);
-    const user = userData?.user;
-    if (userError || !user) return json({ error: "Unauthorized" }, 401);
+  const token = bearerToken(req);
+  if (!token) return json({ error: "Unauthorized" }, 401);
 
-    let input: { action?: string; messageId?: string } = {};
-    try { input = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+  const service = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
 
-    if (input.action === "config") {
-      if (!vapidPublicKey) return json({ error: "Push notifications are not configured yet" }, 503);
-      return json({ publicKey: vapidPublicKey });
-    }
+  const { data: userData, error: userError } = await service.auth.getUser(token);
+  const user = userData?.user;
+  if (userError || !user) return json({ error: "Unauthorized" }, 401);
 
-    if (input.action !== "send") return json({ error: "Unknown action" }, 400);
-    if (!vapidPublicKey || !vapidPrivateKey || !vapidSubject) {
-      return json({ error: "Push notifications are not configured yet" }, 503);
-    }
+  if (input.action === "status") {
+    const { count, error } = await service
+      .from("push_subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    if (error) return json({ error: error.message }, 500);
+    return json({ configured: Boolean(vapidPublicKey && vapidPrivateKey && vapidSubject), subscriptionCount: count || 0 });
+  }
 
-    const messageId = String(input.messageId || "").trim();
-    if (!messageId) return json({ error: "messageId is required" }, 400);
+  if (!vapidPublicKey || !vapidPrivateKey || !vapidSubject) {
+    return json({ error: "Push notifications are not configured yet" }, 503);
+  }
 
-    const { data: message, error: messageError } = await service
-      .from("chat_messages")
-      .select("id,pair_id,sender_id,body,created_at")
-      .eq("id", messageId)
-      .maybeSingle();
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
-    if (messageError) return json({ error: messageError.message }, 500);
-    if (!message) return json({ error: "Message not found" }, 404);
-    if (message.sender_id !== user.id) return json({ error: "Only the sender can trigger this notification" }, 403);
-
-    const { data: members, error: membersError } = await service
-      .from("pair_members")
-      .select("user_id")
-      .eq("pair_id", message.pair_id);
-
-    if (membersError) return json({ error: membersError.message }, 500);
-    const memberIds = (members || []).map(row => row.user_id);
-    if (!memberIds.includes(user.id)) return json({ error: "Not a member of this pair" }, 403);
-
-    const recipientIds = memberIds.filter(id => id !== user.id);
-    if (!recipientIds.length) return json({ sent: 0, reason: "No partner connected" });
-
-    const [{ data: profile }, { data: subscriptions, error: subscriptionError }] = await Promise.all([
-      service.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
-      service
-        .from("push_subscriptions")
-        .select("id,user_id,endpoint,p256dh,auth_key")
-        .eq("pair_id", message.pair_id)
-        .in("user_id", recipientIds)
-    ]);
-
-    if (subscriptionError) return json({ error: subscriptionError.message }, 500);
-    if (!subscriptions?.length) return json({ sent: 0, reason: "Partner has not enabled notifications" });
-
-    const senderName = String(profile?.display_name || user.user_metadata?.display_name || "Your person").slice(0, 60);
-    const payload = JSON.stringify({
-      type: "chat-message",
-      title: "Koi 💗",
-      body: `${senderName} sent you a message 💬`,
-      url: "./#chat",
-      tag: `koi-chat-${message.pair_id}`,
-      messageId: message.id,
-      createdAt: message.created_at
-    });
-
-    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-
+  async function sendToSubscriptions(subscriptions: any[], payload: string) {
+    if (!subscriptions?.length) return { sent: 0, attempted: 0, staleRemoved: 0 };
     let sent = 0;
     const staleIds: string[] = [];
     const results = await Promise.allSettled(subscriptions.map(async subscription => {
@@ -116,10 +79,7 @@ export default {
         await webpush.sendNotification({
           endpoint: subscription.endpoint,
           keys: { p256dh: subscription.p256dh, auth: subscription.auth_key }
-        }, payload, {
-          TTL: 60 * 60 * 24,
-          urgency: "high"
-        });
+        }, payload, { TTL: 60 * 60 * 24, urgency: "high" });
         sent += 1;
       } catch (error) {
         const status = statusCodeOf(error);
@@ -127,11 +87,102 @@ export default {
         else console.error("Koi web push delivery failed", status, String((error as Error)?.message || error));
       }
     }));
-
-    if (staleIds.length) {
-      await service.from("push_subscriptions").delete().in("id", staleIds);
-    }
-
-    return json({ sent, attempted: results.length, staleRemoved: staleIds.length });
+    if (staleIds.length) await service.from("push_subscriptions").delete().in("id", staleIds);
+    return { sent, attempted: results.length, staleRemoved: staleIds.length };
   }
-};
+
+  if (input.action === "test") {
+    const { data: subscriptions, error } = await service
+      .from("push_subscriptions")
+      .select("id,user_id,endpoint,p256dh,auth_key")
+      .eq("user_id", user.id);
+    if (error) return json({ error: error.message }, 500);
+    if (!subscriptions?.length) return json({ sent: 0, reason: "This phone has no saved push subscription yet" });
+    const payload = JSON.stringify({
+      type: "chat-message",
+      title: "Koi 💗",
+      body: "Notifications are working on this phone 🔔",
+      url: "./#chat",
+      tag: `koi-test-${user.id}`
+    });
+    return json(await sendToSubscriptions(subscriptions, payload));
+  }
+
+  if (input.action === "send-note") {
+    const pairId = String(input.pairId || "").trim();
+    if (!pairId) return json({ error: "pairId is required" }, 400);
+
+    const { data: note, error: noteError } = await service
+      .from("pair_notes")
+      .select("pair_id,body,author_id,updated_at")
+      .eq("pair_id", pairId)
+      .maybeSingle();
+    if (noteError) return json({ error: noteError.message }, 500);
+    if (!note || !note.body) return json({ sent: 0, reason: "No active note" });
+    if (note.author_id !== user.id) return json({ error: "Only the latest note author can trigger this notification" }, 403);
+
+    const { data: members, error: membersError } = await service.from("pair_members").select("user_id").eq("pair_id", pairId);
+    if (membersError) return json({ error: membersError.message }, 500);
+    const memberIds = (members || []).map(row => row.user_id);
+    if (!memberIds.includes(user.id)) return json({ error: "Not a member of this pair" }, 403);
+    const recipientIds = memberIds.filter(id => id !== user.id);
+    if (!recipientIds.length) return json({ sent: 0, reason: "No partner connected" });
+
+    const [{ data: profile }, { data: subscriptions, error: subError }] = await Promise.all([
+      service.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+      service.from("push_subscriptions").select("id,user_id,endpoint,p256dh,auth_key").eq("pair_id", pairId).in("user_id", recipientIds)
+    ]);
+    if (subError) return json({ error: subError.message }, 500);
+    if (!subscriptions?.length) return json({ sent: 0, reason: "Partner has not enabled notifications" });
+    const senderName = String(profile?.display_name || user.user_metadata?.display_name || "Your person").slice(0, 60);
+    const payload = JSON.stringify({
+      type: "koi-note",
+      title: "Koi 💗",
+      body: `${senderName} left you a Koi Note 💌`,
+      url: "./#home",
+      tag: `koi-note-${pairId}`,
+      createdAt: note.updated_at
+    });
+    return json(await sendToSubscriptions(subscriptions, payload));
+  }
+
+  if (input.action !== "send") return json({ error: "Unknown action" }, 400);
+
+  const messageId = String(input.messageId || "").trim();
+  if (!messageId) return json({ error: "messageId is required" }, 400);
+
+  const { data: message, error: messageError } = await service
+    .from("chat_messages")
+    .select("id,pair_id,sender_id,body,created_at")
+    .eq("id", messageId)
+    .maybeSingle();
+  if (messageError) return json({ error: messageError.message }, 500);
+  if (!message) return json({ error: "Message not found" }, 404);
+  if (message.sender_id !== user.id) return json({ error: "Only the sender can trigger this notification" }, 403);
+
+  const { data: members, error: membersError } = await service.from("pair_members").select("user_id").eq("pair_id", message.pair_id);
+  if (membersError) return json({ error: membersError.message }, 500);
+  const memberIds = (members || []).map(row => row.user_id);
+  if (!memberIds.includes(user.id)) return json({ error: "Not a member of this pair" }, 403);
+  const recipientIds = memberIds.filter(id => id !== user.id);
+  if (!recipientIds.length) return json({ sent: 0, reason: "No partner connected" });
+
+  const [{ data: profile }, { data: subscriptions, error: subscriptionError }] = await Promise.all([
+    service.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+    service.from("push_subscriptions").select("id,user_id,endpoint,p256dh,auth_key").eq("pair_id", message.pair_id).in("user_id", recipientIds)
+  ]);
+  if (subscriptionError) return json({ error: subscriptionError.message }, 500);
+  if (!subscriptions?.length) return json({ sent: 0, reason: "Partner has not enabled notifications" });
+
+  const senderName = String(profile?.display_name || user.user_metadata?.display_name || "Your person").slice(0, 60);
+  const payload = JSON.stringify({
+    type: "chat-message",
+    title: "Koi 💗",
+    body: `${senderName} sent you a message 💬`,
+    url: "./#chat",
+    tag: `koi-chat-${message.pair_id}`,
+    messageId: message.id,
+    createdAt: message.created_at
+  });
+  return json(await sendToSubscriptions(subscriptions, payload));
+});
