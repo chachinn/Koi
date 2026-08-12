@@ -1,8 +1,8 @@
-const CACHE_VERSION = "koi-step33-clean-ui-v16";
+const CACHE_VERSION = "koi-step34-nav-fix-v17";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css",
+  "./style.css?v=34",
   "./app.js",
   "./data/data.js",
   "./services/app-update.js",
