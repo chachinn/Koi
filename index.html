@@ -106,6 +106,21 @@
   <script src="data/data.js?v=35" defer></script>
   <script src="services/app-update.js?v=35" defer></script>
   <script src="app.js?v=35" defer></script>
+  <script defer>
+    (() => {
+      const copy = "Koi (恋) means “love” or “romance.” A simple name for a space made for two people—to share memories, plans, messages, and the little things that make a relationship theirs. The two koi in the icon form a heart, tying the name back to the idea of two people coming together in love.";
+      const apply = () => {
+        const card = document.querySelector(".about-koi-card");
+        if (!card) return;
+        const paragraph = Array.from(card.querySelectorAll("p")).find(node => !node.classList.contains("eyebrow"));
+        if (paragraph) paragraph.textContent = copy;
+      };
+      const main = document.getElementById("mainView");
+      if (main) new MutationObserver(apply).observe(main, { childList: true, subtree: true });
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once: true });
+      else apply();
+    })();
+  </script>
 
   <!-- Koi Cloud Foundation 2.0
        Supabase's publishable key is safe for browser use when RLS is enabled.
