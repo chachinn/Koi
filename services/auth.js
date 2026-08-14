@@ -36,8 +36,25 @@
     async signIn({ email, password }) {
       const client = requireClient();
       const { data, error } = await client.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      if (error) {
+        if (error.code === "invalid_credentials") {
+          throw new Error("That email/password did not match. If you created Koi with Google, use Continue with Google.");
+        }
+        throw error;
+      }
       cloud.runtime.session = data.session || null;
+      return data;
+    },
+
+    async signInWithGoogle() {
+      const client = requireClient();
+      const { data, error } = await client.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: cloud.config.authRedirectUrl
+        }
+      });
+      if (error) throw error;
       return data;
     },
 
