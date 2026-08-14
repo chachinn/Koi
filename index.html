@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="icon/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="icon/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="icon/favicon-16.png" />
-  <link rel="stylesheet" href="style.css?v=35" />
+  <link rel="stylesheet" href="style.css?v=36" />
   <title>Koi 💗</title>
 </head>
 <body class="koi-booting">
@@ -102,46 +102,32 @@
     </div>
   </template>
 
-  <script src="services/boot.js?v=35" defer></script>
-  <script src="data/data.js?v=35" defer></script>
-  <script src="services/app-update.js?v=35" defer></script>
-  <script src="app.js?v=35" defer></script>
-  <script defer>
-    (() => {
-      const copy = "Koi (恋) means “love” or “romance.” A simple name for a space made for two people—to share memories, plans, messages, and the little things that make a relationship theirs. The two koi in the icon form a heart, tying the name back to the idea of two people coming together in love.";
-      const apply = () => {
-        const card = document.querySelector(".about-koi-card");
-        if (!card) return;
-        const paragraph = Array.from(card.querySelectorAll("p")).find(node => !node.classList.contains("eyebrow"));
-        if (paragraph) paragraph.textContent = copy;
-      };
-      const main = document.getElementById("mainView");
-      if (main) new MutationObserver(apply).observe(main, { childList: true, subtree: true });
-      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once: true });
-      else apply();
-    })();
-  </script>
+  <script src="services/boot.js?v=36" defer></script>
+  <script src="data/data.js?v=36" defer></script>
+  <script src="services/app-update.js?v=36" defer></script>
+  <script src="app.js?v=36" defer></script>
+  <script src="services/about-name.js?v=36" defer></script>
 
   <!-- Koi Cloud Foundation 2.0
        Supabase's publishable key is safe for browser use when RLS is enabled.
        NEVER place a secret/service-role key in these files. -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.min.js" defer></script>
-  <script src="config/supabase-config.js?v=35" defer></script>
-  <script src="services/supabase.js?v=35" defer></script>
-  <script src="services/auth.js?v=35" defer></script>
-  <script src="services/pairs.js?v=35" defer></script>
-  <script src="services/little-things.js?v=35" defer></script>
-  <script src="services/memories.js?v=35" defer></script>
-  <script src="services/shared-state.js?v=35" defer></script>
-  <script src="services/world.js?v=35" defer></script>
-  <script src="features/koi-world.js?v=35" defer></script>
-  <script src="services/push-notifications.js?v=35" defer></script>
-  <script src="services/koi-note.js?v=35" defer></script>
-  <script src="features/koi-note.js?v=35" defer></script>
-  <script src="services/chat.js?v=35" defer></script>
-  <script src="features/koi-chat.js?v=35" defer></script>
-  <script src="services/live-sync.js?v=35" defer></script>
-  <script src="services/sync.js?v=35" defer></script>
-  <script src="services/cloud-bootstrap.js?v=35" defer></script>
+  <script src="config/supabase-config.js?v=36" defer></script>
+  <script src="services/supabase.js?v=36" defer></script>
+  <script src="services/auth.js?v=36" defer></script>
+  <script src="services/pairs.js?v=36" defer></script>
+  <script src="services/little-things.js?v=36" defer></script>
+  <script src="services/memories.js?v=36" defer></script>
+  <script src="services/shared-state.js?v=36" defer></script>
+  <script src="services/world.js?v=36" defer></script>
+  <script src="features/koi-world.js?v=36" defer></script>
+  <script src="services/push-notifications.js?v=36" defer></script>
+  <script src="services/koi-note.js?v=36" defer></script>
+  <script src="features/koi-note.js?v=36" defer></script>
+  <script src="services/chat.js?v=36" defer></script>
+  <script src="features/koi-chat.js?v=36" defer></script>
+  <script src="services/live-sync.js?v=36" defer></script>
+  <script src="services/sync.js?v=36" defer></script>
+  <script src="services/cloud-bootstrap.js?v=36" defer></script>
 </body>
 </html>
